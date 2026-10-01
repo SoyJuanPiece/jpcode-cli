@@ -5,13 +5,23 @@ Tu CLI de código, con la pinta de Claude Code, sobre **Qwen Code (Apache-2.0)**
 
 ## Instalación
 
-Primero la base (lo único que no viaja en el repo):
+No hace falta nada más que **Node ≥ 22**: el motor viaja dentro del paquete, así que no hay que
+instalar Qwen Code aparte.
+
+Con **Homebrew** (macOS y Linux):
 
 ```bash
-npm i -g @qwen-code/qwen-code
+brew install SoyJuanPiece/tap/jpcode
 ```
 
-Y luego jpcode, de una línea. Baja el paquete de la última release, comprueba su SHA256, lo deja
+La fórmula vive en [SoyJuanPiece/homebrew-tap](https://github.com/SoyJuanPiece/homebrew-tap) y
+instala el paquete entero desde la release. Para actualizarla en cada release:
+
+```bash
+bash update-tap.sh
+```
+
+O de una línea, sin Homebrew. Baja el paquete de la última release, comprueba su SHA256, lo deja
 en `~/.jpcode/src` (permanente, nunca `/tmp`) y lanza el `install.sh` de dentro:
 
 ```bash
@@ -30,7 +40,7 @@ Para clavar una versión o cambiar dónde se instala (expórtalas: `VAR=x cmd1 |
 a `cmd1`, y `get.sh` se ejecuta en el otro lado del tubo):
 
 ```bash
-export JPCODE_VERSION=v0.1.0 JPCODE_SRC=~/jpcode
+export JPCODE_VERSION=v0.1.1 JPCODE_SRC=~/jpcode
 curl -fsSL https://github.com/SoyJuanPiece/jpcode-dist/releases/latest/download/get.sh | bash
 ```
 
@@ -51,8 +61,8 @@ jpcode                     # interactivo
 jpcode "explica esto"      # one-shot
 ```
 
-Solo necesita **Node ≥ 22** (lo exige Qwen Code, no jpcode) y el gateway viaja dentro del repo, así
-que no hay dependencias que instalar.
+Solo necesita **Node ≥ 22**. El motor y el gateway viajan dentro del paquete, así que no hay
+dependencias que instalar.
 
 **Clónalo siempre en una carpeta permanente.** `install.sh` enlaza el binario a la carpeta desde la
 que se ejecuta: si lo lanzas en `/tmp`, tu `jpcode` apunta a `/tmp` y se rompe cuando se vacíe.
@@ -194,7 +204,12 @@ node patch-jpcode-clipboard.mjs           # aviso de pegado de imagen veraz
 node patch-jpcode-image-watch.mjs         # que jpcode adjunte lo que llega del puente
 node gateway/test.mjs                     # pruebas del gateway (209 aserciones)
 QWEN_HOME=~/.jpcode node sync-jpcode.mjs
+bash build-dist.sh                        # minifica, prueba y publica la release
+bash update-tap.sh                        # apunta la fórmula de Homebrew a esa release
 ```
+
+`release.sh` queda **deprecado**: construía el tarball con `git archive`, que no incluye `engine/`
+(está ignorado por git), y publicó una `v0.1.0` sin motor. Ahora solo delega en `build-dist.sh`.
 
 ## Base legal
 
