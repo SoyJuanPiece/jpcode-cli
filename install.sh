@@ -69,14 +69,29 @@ fi
 # 5) Tema y banner.
 QWEN_HOME="$JP_HOME" node "$AQUI/sync-jpcode.mjs" || true
 
-# 6) El binario, en el primer directorio de binarios que exista.
+# 6) El binario, en el primer directorio de binarios que exista. En una máquina
+#    recién estrenada no existe ninguno, y antes eso dejaba a jpcode sin enlazar:
+#    había que arrancarlo con `node .../bin/jpcode.mjs` a mano. Ahora se crea
+#    ~/.local/bin, que es el estándar de facto.
+DESTINO=""
 for d in "$HOME/.global_modules/bin" "$HOME/.local/bin" "$HOME/.npm-global/bin"; do
-  if [ -d "$d" ]; then
-    ln -sf "$AQUI/bin/jpcode.mjs" "$d/jpcode"
-    echo "✅ jpcode en $d/jpcode"
-    echo "   pruébalo con:  jpcode"
-    exit 0
-  fi
+  if [ -d "$d" ]; then DESTINO="$d"; break; fi
 done
+if [ -z "$DESTINO" ]; then
+  DESTINO="$HOME/.local/bin"
+  mkdir -p "$DESTINO"
+fi
 
-echo "✅ hecho. Ejecuta:  node $AQUI/bin/jpcode.mjs"
+ln -sf "$AQUI/bin/jpcode.mjs" "$DESTINO/jpcode"
+echo "✅ jpcode en $DESTINO/jpcode"
+
+# Aviso honesto: el enlace no sirve de nada si esa carpeta no está en el PATH.
+case ":$PATH:" in
+  *":$DESTINO:"*)
+    echo "   pruébalo con:  jpcode"
+    ;;
+  *)
+    echo "   ⚠️  $DESTINO no está en tu PATH. Añádelo y reinicia la terminal:"
+    echo "       export PATH=\"$DESTINO:\$PATH\""
+    ;;
+esac
