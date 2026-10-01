@@ -40,8 +40,12 @@ log "bajando $URL"
 curl -fsSL "$URL" -o "$TMP/$ASSET" || die "no pude descargar $ASSET de $VERSION"
 SHA="$(sha256sum "$TMP/$ASSET" | cut -d' ' -f1)"
 
-# Red de seguridad: sin motor, el paquete instalado no arranca.
-tar -tzf "$TMP/$ASSET" | grep -q "engine/cli-entry.js" \
+# Red de seguridad: sin motor, el paquete instalado no arranca. Se lista a un
+# fichero en vez de encadenar `tar | grep -q`: grep -q cierra el tubo en cuanto
+# encuentra la línea, tar muere con SIGPIPE (141), y con `set -o pipefail` eso
+# haría fallar la comprobación justo cuando SÍ encontró el motor.
+tar -tzf "$TMP/$ASSET" > "$TMP/contenido.txt"
+grep -q "engine/cli-entry.js" "$TMP/contenido.txt" \
   || die "el tarball de $VERSION no lleva engine/cli-entry.js; no toco la fórmula"
 
 log "clonando $TAP_REPO"
