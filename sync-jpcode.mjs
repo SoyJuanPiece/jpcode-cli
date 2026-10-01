@@ -7,7 +7,10 @@
  *   ui.customThemes.jpcode → la paleta de theme.json (negro + naranja Claude)
  *   ui.customAsciiArt      → banner propio (JPCODE grande / JPC compacto)
  *   ui.customBannerTitle   → "jpcode"
- *   ui.customBannerSubtitle→ atribución honesta
+ *   ui.customBannerSubtitle→ vacío (jpcode no se presenta como derivado de nada)
+ *   ui.customWittyPhrases  → frases del indicador de trabajo, sobrias
+ *   general.enableAutoUpdate → false (jpcode NO se auto-actualiza; ver abajo)
+ *   tools.toolSearch.threshold → herramientas declaradas de entrada, sin puente
  *
  * Es idempotente: fusiona sobre ~/.qwen/settings.json sin tocar el resto
  * (modelProviders, providerProtocol, permisos, security…).
@@ -48,7 +51,23 @@ const BANNER_LARGE = arte(["J", "P", "C", "O", "D", "E"]); // ancho: JPCODE
 const BANNER_SMALL = arte(["J", "P", "C"]); // compacto para terminales estrechos
 
 const TITULO = "jpcode";
-const SUBTITULO = "fork de Qwen Code · Apache-2.0";
+/* Sin subtítulo. Aquí ponía «fork de Qwen Code · Apache-2.0», y la cabecera del
+   TUI es escaparate del producto, no aviso legal: jpcode es un CLI propio. La
+   atribución que Apache-2.0 exige sigue donde toca, junto al motor:
+   engine/LICENSE y engine/NOTICE-jpcode.md. */
+const SUBTITULO = "";
+
+/* Frases del indicador de trabajo. Las de fábrica son chistes ("Reticulating
+   splines...", "Warming up the AI hamsters...") que rotan cada 15 s y hacen que
+   la línea parezca rota; estas son del mismo tono seco que las de Claude Code. */
+const FRASES_TRABAJO = [
+  "Thinking…",
+  "Pondering…",
+  "Musing…",
+  "Synthesizing…",
+  "Determining…",
+  "Percolating…",
+];
 
 /* ---------- cargar/merge ---------- */
 function leerJson(p, porDefecto = {}) {
@@ -72,8 +91,29 @@ ui.customThemes = { ...(ui.customThemes || {}), [tema.name]: tema };
 ui.customAsciiArt = { small: BANNER_SMALL, large: BANNER_LARGE };
 ui.customBannerTitle = TITULO;
 ui.customBannerSubtitle = SUBTITULO;
+ui.customWittyPhrases = FRASES_TRABAJO;
 
-const salida = { ...actual, ui };
+/* El motor trae su propio auto-update encendido y cree que es
+   `@qwen-code/qwen-code@0.24.7`: lo lee de engine/package.json y, si ve una
+   versión más nueva en npm, lanza en segundo plano un `npm i -g` del paquete
+   equivocado (instala otro CLI entero, no actualiza jpcode). En Windows ese
+   baile de carpetas es justo el que da EBUSY. Lo apagamos: jpcode se actualiza
+   a mano con `npm i -g @juanpiecedev/jpcode@latest`. */
+const general = { ...(actual.general || {}), enableAutoUpdate: false };
+
+/* Las herramientas "diferidas" y su puente. El motor, de fábrica, esconde casi
+   todas las herramientas detrás de dos: `tool_search` (buscar) y `tool_call`
+   (invocar). Para modelos que se pierden con el esquema (los gratis, sin ir más
+   lejos) eso es un bucle de "params must have required property…" y el chat se
+   llena de errores. Con este presupuesto el motor las declara todas de entrada
+   y el modelo llama a cada herramienta por su nombre, sin puente de por medio.
+   Es un porcentaje de la ventana de contexto; 20% sobra para el catálogo entero. */
+const tools = {
+  ...(actual.tools || {}),
+  toolSearch: { ...(actual.tools?.toolSearch || {}), threshold: 20 },
+};
+
+const salida = { ...actual, ui, general, tools };
 
 if (process.argv.includes("--print")) {
   console.log(JSON.stringify(salida, null, 2));
@@ -84,5 +124,7 @@ mkdirSync(dirname(SETTINGS), { recursive: true });
 writeFileSync(SETTINGS, JSON.stringify(salida, null, 2) + "\n");
 console.log(`✓ jpcode aplicado en ${SETTINGS}`);
 console.log(`  tema:   ${tema.name} (${tema.Background} · acento ${tema.AccentPurple})`);
-console.log(`  banner: "${TITULO}" — ${SUBTITULO}`);
+console.log(`  banner: "${TITULO}"${SUBTITULO ? ` — ${SUBTITULO}` : " (sin subtítulo)"}`);
+console.log(`  trabajo: ${FRASES_TRABAJO.join(" ")} · auto-update del motor: off`);
+console.log(`  tools:  toolSearch.threshold=${tools.toolSearch.threshold} (declaradas de entrada)`);
 process.exit(0);

@@ -104,7 +104,7 @@ repositorio, y se pueden reproducir con \`bash vendor-engine.sh\`:
 
 | Parche | Qué cambia |
 | --- | --- |
-| \`patch-jpcode-brand\` | Textos visibles: título de ventana y cadenas de marca. |
+| \`patch-jpcode-brand\` | Textos visibles (título de ventana y cadenas de marca) y color del spinner del indicador de trabajo. |
 | \`patch-jpcode-clipboard\` | Sustituye el aviso de pegado de imágenes por uno veraz. |
 | \`patch-jpcode-image-watch\` | Añade el vigilante que adjunta la imagen que llega del puente. |
 | \`patch-qwen-search\` | Buscador en /model. |

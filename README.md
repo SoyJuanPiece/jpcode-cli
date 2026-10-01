@@ -71,6 +71,24 @@ Desde la **0.1.5** el gateway ya no se arranca con el directorio de trabajo dent
 (`cwd: ~/.jpcode` + `OPENCODE_CHAT_DIR`), así que esto no vuelve a pasar. Si venías de una versión
 anterior, hay que matar el proceso viejo **una sola vez**.
 
+### Si el chat se llena de errores de herramientas
+
+Dos cosas distintas, y ninguna es «la interfaz»:
+
+- **`[tool_call bridge refused] params must have required property 'arguments'`** y
+  `ToolSearch {"pattern":…}` en bucle. De fábrica el motor esconde casi todas las herramientas
+  detrás de dos: `ToolSearch` para descubrirlas y `tool_call` para invocarlas. Un modelo que se
+  pierde con ese esquema se lía con el puente y el chat se llena de rechazos. jpcode sube
+  `tools.toolSearch.threshold` al **20 % de la ventana de contexto**, y con eso el motor declara
+  todas las herramientas de entrada: el modelo las llama por su nombre y el puente no se usa.
+  Comprobado en una sesión real: el modelo llama a `read_file` directo y `tool_search` /
+  `tool_call` no aparecen ni una vez en el registro de la sesión.
+- **`EPERM: operation not permitted, mkdir 'C:\Users\.qwen'`** (en Linux, `EACCES`). El motor
+  guarda estado de proyecto en `<carpeta actual>/.qwen` — ajustes de workspace, *welcome-back*,
+  temporales. Si abres jpcode donde no puedes escribir (`C:\Users`, la raíz de un disco, `/`), esa
+  `mkdir` falla y el error sale dentro de una respuesta del chat. Ábrelo **dentro de la carpeta del
+  proyecto**.
+
 ## Qué incluye
 
 - **Paquete propio** (`package.json`, bin `jpcode`, licencia Apache-2.0).
@@ -87,16 +105,36 @@ anterior, hay que matar el proceso viejo **una sola vez**.
     | clave en `theme.json` | dónde se ve |
     | --- | --- |
     | `AccentPurple` | texto de acento — **aquí va el naranja** |
-    | `AccentCyan` | símbolos (spinner, iconos) |
-    | `Gray` | texto secundario y **borde del prompt** |
+    | `AccentCyan` | color de acento de la paleta heredada (el spinner usa `AccentPurple`) |
+    | `Gray` | texto secundario, **borde del prompt** y símbolos (`ui.symbol`) |
     | `AccentBlue` | enlaces y borde enfocado |
     | `LightBlue` | código en línea |
     | `GradientColors` | degradado del banner |
     | `DiffAdded` / `DiffRemoved` | fondo de líneas en los diffs |
 
     `DiffModified` está en la documentación del motor pero **no lo lee**: se deja por si una
-    versión futura lo usa.
-  - Banner ASCII `JPCODE` (grande) / `JPC` (compacto), título y subtítulo propios.
+    versión futura lo usa. Y ojo con una trampa: en un tema `custom` el motor saca los símbolos
+    (`ui.symbol`) de `Gray`, no de `AccentCyan` — el nombre engaña.
+  - Banner ASCII `JPCODE` (grande) / `JPC` (compacto), título propio y **sin subtítulo**: jpcode
+    se presenta como lo que es, no como derivado de otro CLI. La atribución del motor
+    (Apache-2.0) vive donde toca, en `engine/LICENSE` y `engine/NOTICE-jpcode.md`.
+  - **Indicador de trabajo** propio: el spinner se dibuja en el color de acento (antes blanco) y
+    las frases son del mismo tono seco que las de Claude Code — *Thinking…, Pondering…, Musing…,
+    Synthesizing…, Determining…, Percolating…* — en lugar de los chistes del motor
+    (*Reticulating splines…*, *Warming up the AI hamsters…*), que rotaban cada 15 s y hacían que
+    la línea pareciera rota. Las frases se cambian en `sync-jpcode.mjs` (`FRASES_TRABAJO`).
+  - **Auto-update del motor apagado** (`general.enableAutoUpdate: false`). El motor traía el suyo
+    encendido y creía ser `@qwen-code/qwen-code@0.24.7`: leía `engine/package.json` y, al ver una
+    versión nueva en npm, podía lanzar en segundo plano un `npm i -g` de **otro** paquete. jpcode
+    se actualiza a mano:
+
+    ```bash
+    npm i -g @juanpiecedev/jpcode@latest
+    ```
+
+    Ese `npm i -g` a mano es también el que hace el *rename* de la carpeta del paquete; con el
+    arreglo de la 0.1.5 (el gateway ya no corre con el `cwd` dentro del paquete) no da `EBUSY`
+    aunque tengas jpcode abierto. Aun así, lo limpio en Windows es cerrar jpcode antes.
   - **Título de ventana** del terminal: `jpcode - <carpeta>`.
 - **Todo lo del gateway**, con la misma experiencia que OpenCode:
   - **`/connect`** (y **`/provider`**) abren *«Connect a Provider»* directamente en el catálogo
@@ -118,7 +156,7 @@ anterior, hay que matar el proceso viejo **una sola vez**.
 | --- | --- |
 | `bin/jpcode.mjs` | Prepara config/identidad y arranca por el envoltorio del gateway. |
 | `sync-jpcode.mjs` | Fusiona tema y banner en `~/.jpcode/settings.json` (idempotente). |
-| `patch-jpcode-brand.mjs` | Rebrandea los textos en código: título de ventana y cadenas visibles. |
+| `patch-jpcode-brand.mjs` | Rebrandea el motor: título de ventana, cadenas visibles y color del spinner. |
 | `patch-jpcode-clipboard.mjs` | Cambia el aviso de pegado de imagen por uno veraz y accionable. |
 | `img-bridge.mjs` | Puente: servidor + página para pegar la imagen desde el navegador. |
 | `patch-jpcode-image-watch.mjs` | Adjunta sola en el prompt la imagen que llega del puente. |
@@ -160,8 +198,9 @@ caché del catálogo (`.cache/`, 9 MB) ni el binario de `cloudflared` (`.bin/`, 
 La clave del proxy (`.api-key`) **se autogenera** la primera vez que arranca el gateway, con
 permisos `600`: no hay nada que configurar ni que compartir.
 
-El branding **no parchea binarios** salvo los textos: Qwen expone tema, banner y subtítulo por
-ajustes (`ui.customThemes`, `ui.customAsciiArt`, `ui.customBannerTitle/Subtitle`).
+El branding **no parchea binarios**: Qwen expone tema, banner y frases por ajustes
+(`ui.customThemes`, `ui.customAsciiArt`, `ui.customBannerTitle`, `ui.customWittyPhrases`) y lo que
+escribe en código se reescribe al vendorizar el motor (`patch-jpcode-brand.mjs`).
 
 ### Imágenes: el puente del navegador
 
@@ -251,6 +290,6 @@ cajas, barra de estado), no su código ni su marca.
 
 ## Siguientes pasos
 
-- Spinners y frases de "pensando" propias.
+- El número de versión de la cabecera (`v0.24.7`) es el del motor: ponerle el de jpcode.
 - Logo ASCII definitivo con tu diseño.
 - Completar el rebranding de la UI (menús, `/help`, `/status`).
