@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-# Publica jpcode en npm.
+# Publica jpcode en npm (el registro de npm).
 #
-#   bash publish-npm.sh              # construye, prueba y publica
+#   bash publish-npm.sh              # construye, prueba y publica con npm
+#   bash publish-npm.sh --bun        # construye, prueba y publica con bun
 #   bash publish-npm.sh --dry-run    # construye y enseña qué se subiría
+#   bash publish-npm.sh --bun --dry-run
+#
+# OJO: Bun no tiene registro propio. `bun publish` sube al MISMO registro de
+# npm (registry.npmjs.org). Bun es solo otra herramienta para publicar ahí;
+# su ventaja es que lee NPM_CONFIG_TOKEN y no necesita `npm login`.
 #
 # En CI lo llama el workflow .github/workflows/publish-npm.yml, que publica por
-# OIDC (sin tokens ni secretos). En local necesita `npm login` una vez.
+# OIDC (sin tokens ni secretos) con npm. La publicación por OIDC solo la hace
+# npm, así que en CI no se usa --bun.
 #
 # Se publica el ÁRBOL MINIFICADO, el mismo que la release de GitHub: no se sube
 # el código fuente legible. Ojo con la expectativa de siempre — minificar no
@@ -16,7 +23,19 @@ AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$AQUI"
 
 SECO=0
-[ "${1:-}" = "--dry-run" ] && SECO=1
+PUBLICADOR="npm"
+for ARG in "$@"; do
+  case "$ARG" in
+    --dry-run) SECO=1 ;;
+    --bun)     PUBLICADOR="bun" ;;
+    *) echo "Opción no reconocida: $ARG" >&2; exit 2 ;;
+  esac
+done
+
+if [ "$PUBLICADOR" = "bun" ] && ! command -v bun >/dev/null 2>&1; then
+  echo "✕ falta bun; instálalo desde https://bun.sh o usa npm" >&2
+  exit 1
+fi
 
 NOMBRE="$(node -p "require('./package.json').name")"
 VERSION="$(node -p "require('./package.json').version")"
@@ -35,12 +54,29 @@ cp "$AQUI/postinstall.mjs" "$STAGE/postinstall.mjs"
 
 echo "→ $NOMBRE@$VERSION"
 
+if [ "$PUBLICADOR" = "bun" ]; then
+  # --ignore-scripts para que el postinstall no se ejecute durante el
+  # empaquetado (bun corre los scripts del ciclo de vida al empaquetar él
+  # mismo). El paquete ya viene construido y probado por build-dist.sh.
+  PUBLICAR=(bun publish --access public --ignore-scripts)
+else
+  PUBLICAR=(npm publish --access public)
+fi
+
 if [ "$SECO" = 1 ]; then
-  ( cd "$STAGE" && npm publish --dry-run )
-  echo "✅ en seco: no se ha publicado nada"
+  ( cd "$STAGE" && "${PUBLICAR[@]}" --dry-run )
+  echo "✅ en seco con $PUBLICADOR: no se ha publicado nada"
   exit 0
+fi
+
+if [ "$PUBLICADOR" = "bun" ]; then
+  echo "→ publicando con bun (destino: registry.npmjs.org)"
+  if [ -z "${NPM_CONFIG_TOKEN:-}" ] && [ -z "${NPM_TOKEN:-}" ] && ! grep -q '_authToken' "$HOME/.npmrc" 2>/dev/null; then
+    echo "✕ bun no encuentra credenciales: define NPM_CONFIG_TOKEN o añade _authToken a ~/.npmrc" >&2
+    exit 1
+  fi
 fi
 
 # --access public porque el paquete es unscoped y no queremos sorpresas de
 # configuración. La provenance la genera npm solo al publicar por OIDC.
-( cd "$STAGE" && npm publish --access public )
+( cd "$STAGE" && "${PUBLICAR[@]}" )
