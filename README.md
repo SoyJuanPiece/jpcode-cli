@@ -9,7 +9,7 @@ No hace falta nada más que **Node ≥ 22**: el motor viaja dentro del paquete, 
 instalar Qwen Code aparte.
 
 ```bash
-npm install -g jpcode
+npm install -g @juanpiecedev/jpcode
 jpcode
 ```
 

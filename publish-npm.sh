@@ -50,6 +50,7 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE"
 tar -xzf "$AQUI/dist/jpcode-app.tar.gz" -C "$STAGE" --strip-components=1
 cp "$AQUI/package.json" "$STAGE/package.json"
+cp "$AQUI/README.md" "$STAGE/README.md"
 cp "$AQUI/postinstall.mjs" "$STAGE/postinstall.mjs"
 
 echo "→ $NOMBRE@$VERSION"
@@ -77,6 +78,6 @@ if [ "$PUBLICADOR" = "bun" ]; then
   fi
 fi
 
-# --access public porque el paquete es unscoped y no queremos sorpresas de
-# configuración. La provenance la genera npm solo al publicar por OIDC.
+# --access public porque el paquete es scoped (@juanpiecedev/jpcode) y por defecto
+# saldría restringido; así queda público. La provenance la genera npm al publicar por OIDC.
 ( cd "$STAGE" && "${PUBLICAR[@]}" )
