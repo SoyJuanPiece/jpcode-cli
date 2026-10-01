@@ -1,27 +1,32 @@
 #!/usr/bin/env bash
 # Instalador de una línea de jpcode.
 #
-#   # repo público
-#   curl -fsSL https://github.com/SoyJuanPiece/jpcode-cli/releases/latest/download/get.sh | bash
+#   curl -fsSL https://github.com/SoyJuanPiece/jpcode-dist/releases/latest/download/get.sh | bash
 #
-#   # repo privado (tira de tu sesión de gh)
-#   gh release download latest -R SoyJuanPiece/jpcode-cli -p get.sh -O - | bash
+# Por defecto baja del repo PÚBLICO de distribución, así que no hace falta ni
+# autenticarse ni tener `gh`. Si `gh` está y hay sesión, se usa (y entonces
+# también vale contra el repo privado del código):
+#
+#   JPCODE_REPO=SoyJuanPiece/jpcode-cli gh release download \
+#     -R SoyJuanPiece/jpcode-cli -p get.sh -O - | bash
 #
 # Variables:
 #   JPCODE_VERSION   v0.1.0 para clavar una versión (por defecto, la última)
 #   JPCODE_SRC       dónde deja el código (por defecto ~/.jpcode/src)
 #   JPCODE_REPO      otro repo, si algún día lo bifurcas
+#   JPCODE_ASSET     otro nombre de paquete dentro de la release
 #
-# Baja el tarball de la release, lo descomprime en JPCODE_SRC y lanza el
-# install.sh de dentro. Se instala en una carpeta PERMANENTE a propósito:
-# install.sh enlaza el binario a la carpeta desde la que se ejecuta, así que
-# instalarlo en /tmp deja un jpcode roto en cuanto /tmp se vacíe.
+# Baja el tarball de la release, comprueba su SHA256, lo descomprime en
+# JPCODE_SRC y lanza el install.sh de dentro. Se instala en una carpeta
+# PERMANENTE a propósito: install.sh enlaza el binario a la carpeta desde la que
+# se ejecuta, así que instalarlo en /tmp deja un jpcode roto en cuanto /tmp se
+# vacíe.
 set -euo pipefail
 
-REPO="${JPCODE_REPO:-SoyJuanPiece/jpcode-cli}"
+REPO="${JPCODE_REPO:-SoyJuanPiece/jpcode-dist}"
 SRC="${JPCODE_SRC:-$HOME/.jpcode/src}"
 VERSION="${JPCODE_VERSION:-latest}"
-ASSET="jpcode-cli.tar.gz"
+ASSET="${JPCODE_ASSET:-jpcode-app.tar.gz}"
 
 log() { printf '→ %s\n' "$*"; }
 die() { printf '✗ %s\n' "$*" >&2; exit 1; }

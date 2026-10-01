@@ -13,7 +13,9 @@ AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$AQUI"
 
 VERSION="${1:-v$(node -p "require('./package.json').version")}"
-ASSET="jpcode-cli.tar.gz"
+# El mismo nombre que usa build-dist.sh, para que un solo get.sh valga contra los
+# dos repos (el privado del código y el público de los artefactos).
+ASSET="jpcode-app.tar.gz"
 DIST="$AQUI/dist"
 
 command -v gh >/dev/null 2>&1 || { echo "✗ hace falta gh y estar autenticado" >&2; exit 1; }

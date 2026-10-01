@@ -11,25 +11,34 @@ Primero la base (lo único que no viaja en el repo):
 npm i -g @qwen-code/qwen-code
 ```
 
-Y luego jpcode de una línea. Baja el tarball de la última release, lo deja en
-`~/.jpcode/src` y lanza su `install.sh`:
+Y luego jpcode, de una línea. Baja el paquete de la última release, comprueba su SHA256, lo deja
+en `~/.jpcode/src` (permanente, nunca `/tmp`) y lanza el `install.sh` de dentro:
 
 ```bash
-# el repo es privado, así que la descarga va por tu sesión de gh
-gh release download -R SoyJuanPiece/jpcode-cli -p get.sh -O - | bash
+curl -fsSL https://github.com/SoyJuanPiece/jpcode-dist/releases/latest/download/get.sh | bash
 ```
 
-Si algún día el repo pasa a público, esto mismo basta sin `gh`:
+`jpcode-dist` es un repo **público que solo tiene artefactos**: el código fuente vive aquí, en
+privado. Lo llena `build-dist.sh`, que minifica el paquete, le pasa el **juego completo de pruebas
+(209 aserciones)** y solo entonces lo publica.
+
+Ojo con la expectativa: **minificar no es proteger**. El código tiene que ejecutarse en la máquina
+de quien instala, así que viaja entero dentro del paquete; un `strings` lo devuelve a la superficie.
+Quita los comentarios y los nombres, y ya. Como cortina vale; como caja fuerte, no.
+
+Para clavar una versión o cambiar dónde se instala (expórtalas: `VAR=x cmd1 | cmd2` solo se las pasa
+a `cmd1`, y `get.sh` se ejecuta en el otro lado del tubo):
 
 ```bash
-curl -fsSL https://github.com/SoyJuanPiece/jpcode-cli/releases/latest/download/get.sh | bash
+export JPCODE_VERSION=v0.1.0 JPCODE_SRC=~/jpcode
+curl -fsSL https://github.com/SoyJuanPiece/jpcode-dist/releases/latest/download/get.sh | bash
 ```
 
-Para clavar una versión o cambiar dónde se instala:
+Y si algún día quieres el paquete del repo privado, con la misma `get.sh`:
 
 ```bash
-JPCODE_VERSION=v0.1.0 JPCODE_SRC=~/jpcode \
-  gh release download -R SoyJuanPiece/jpcode-cli -p get.sh -O - | bash
+JPCODE_REPO=SoyJuanPiece/jpcode-cli gh release download \
+  -R SoyJuanPiece/jpcode-cli -p get.sh -O - | bash
 ```
 
 Y desde el código, si prefieres tenerlo a mano para tocar cosas:
@@ -86,7 +95,8 @@ que se ejecuta: si lo lanzas en `/tmp`, tu `jpcode` apunta a `/tmp` y se rompe c
 | `gateway/` | El gateway (proxy + catálogo + envoltorio `qwen`), sin dependencias. |
 | `sync-gateway.sh` | Refresca `gateway/` desde tu copia de trabajo de opencode-chat. |
 | `get.sh` | Instalador remoto: baja la release y lanza `install.sh`. |
-| `release.sh` | Publica la release (tarball + `get.sh` + `SHA256SUMS`). |
+| `release.sh` | Publica la release del repo privado (tarball + `get.sh` + `SHA256SUMS`). |
+| `build-dist.sh` | Minifica, prueba y publica los artefactos en el repo público. |
 
 La parte «tipo OpenCode» son los parches que `install.sh` aplica sobre el Qwen Code instalado:
 `patch-qwen-providers.mjs` (catálogo completo de models.dev),
