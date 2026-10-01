@@ -3,6 +3,36 @@
 Tu CLI de código, con la pinta de Claude Code, sobre **Qwen Code (Apache-2.0)** y el gateway de
 `opencode-chat` (modelos gratis de Zen + el catálogo de models.dev).
 
+## Instalación
+
+Primero la base (lo único que no viaja en el repo):
+
+```bash
+npm i -g @qwen-code/qwen-code
+```
+
+Y luego jpcode de una línea. Baja el tarball de la última release, lo deja en
+`~/.jpcode/src` y lanza su `install.sh`:
+
+```bash
+# el repo es privado, así que la descarga va por tu sesión de gh
+gh release download latest -R SoyJuanPiece/jpcode-cli -p get.sh -O - | bash
+```
+
+Si algún día el repo pasa a público, esto mismo basta sin `gh`:
+
+```bash
+curl -fsSL https://github.com/SoyJuanPiece/jpcode-cli/releases/latest/download/get.sh | bash
+```
+
+Para clavar una versión o cambiar dónde se instala:
+
+```bash
+JPCODE_VERSION=v0.1.0 JPCODE_SRC=~/jpcode gh release download … | bash
+```
+
+Y desde el código, si prefieres tenerlo a mano para tocar cosas:
+
 ```bash
 git clone https://github.com/SoyJuanPiece/jpcode-cli.git
 cd jpcode-cli
@@ -11,8 +41,11 @@ jpcode                     # interactivo
 jpcode "explica esto"      # one-shot
 ```
 
-Solo necesita **Node ≥ 18 y Qwen Code** (`npm i -g @qwen-code/qwen-code`). El gateway viaja
-dentro del repo y no tiene dependencias.
+Solo necesita **Node ≥ 22** (lo exige Qwen Code, no jpcode) y el gateway viaja dentro del repo, así
+que no hay dependencias que instalar.
+
+**Clónalo siempre en una carpeta permanente.** `install.sh` enlaza el binario a la carpeta desde la
+que se ejecuta: si lo lanzas en `/tmp`, tu `jpcode` apunta a `/tmp` y se rompe cuando se vacíe.
 
 ## Qué incluye
 
@@ -51,6 +84,8 @@ dentro del repo y no tiene dependencias.
 | `install.sh` | Instala, aplica los parches de comportamiento y re-aplica tras `qwen update`. |
 | `gateway/` | El gateway (proxy + catálogo + envoltorio `qwen`), sin dependencias. |
 | `sync-gateway.sh` | Refresca `gateway/` desde tu copia de trabajo de opencode-chat. |
+| `get.sh` | Instalador remoto: baja la release y lanza `install.sh`. |
+| `release.sh` | Publica la release (tarball + `get.sh` + `SHA256SUMS`). |
 
 La parte «tipo OpenCode» son los parches que `install.sh` aplica sobre el Qwen Code instalado:
 `patch-qwen-providers.mjs` (catálogo completo de models.dev),

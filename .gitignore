@@ -11,6 +11,9 @@ tmp/
 .DS_Store
 Thumbs.db
 
+# Artefactos de release (los genera release.sh)
+dist/
+
 # Lo que el gateway (gateway/) genera al arrancar: NUNCA se sube.
 # .api-key se autogenera solo la primera vez; .zen-key es TU clave de Zen.
 gateway/.api-key
