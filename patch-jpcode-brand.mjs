@@ -56,14 +56,41 @@ const TEXTOS = [
 /* Spinner del indicador de trabajo: el motor lo dibuja en el color de texto
  * primario (blanco) mientras la frase de al lado va en el de acento. Poniéndolo
  * en el acento, glifo y texto son una sola pieza naranja, como la línea de
- * trabajo de Claude Code. */
+ * trabajo de Claude Code.
+ *
+ * Y los frames: de fábrica son braille (U+280B…U+280F) y el rango Braille
+ * Patterns NO está en Cascadia Mono ni en Consolas, las fuentes por defecto de
+ * Windows Terminal: la línea de trabajo sale con un cuadro con un interrogante
+ * en lugar del spinner. Los que se ponen aquí son del bloque Geometric Shapes
+ * (U+25D0…U+25D3), el mismo del que salen el ◆/●/○ que la UI ya dibuja bien en
+ * esas fuentes (la cabecera y el estado de las herramientas los usan). */
 const SPINNER = "chunk-PE7HFQGZ.js";
 const SPINNER_NUEVO =
   "color:theme.text.accent,children:(0,import_jsx_runtime.jsx)(build_default,{type:spinnerType})";
+
+/** Texto de un array de strings tal como viaja en el chunk: ["\uXXXX",…]. */
+const frames = (hex) => `["${hex.map((h) => "\\u" + h).join('\",\"')}"]`;
+const BRAILLE_DOTS = [
+  "280B", "2819", "2839", "2838", "283C",
+  "2834", "2826", "2827", "2807", "280F",
+];
+const FRAMES_VISIBLES = ["25D0", "25D3", "25D1", "25D2"]; // ◐ ◓ ◑ ◒
+
 const SPINNER_CAMBIOS = [
   [
     "color:theme.text.primary,children:(0,import_jsx_runtime.jsx)(build_default,{type:spinnerType})",
     SPINNER_NUEVO,
+  ],
+  // Los mismos 10 frames braille están dos veces: los del paquete cli-spinners
+  // (spinner "dots", el de la línea de trabajo) y los del propio motor.
+  [frames(BRAILLE_DOTS), frames(FRAMES_VISIBLES)],
+  // Frame fijo de "esperando tu respuesta": el braille también se veía en cuadro.
+  ['WAITING_SPINNER_FRAME="\\u280F"', 'WAITING_SPINNER_FRAME="\\u25CB"'],
+  // Spinner "toggle" (columna de estado cuando una herramienta se está
+  // ejecutando): ⊶⊷ (U+22B6/U+22B7) tampoco está garantizado en esas fuentes.
+  [
+    `toggle:{interval:250,frames:${frames(["22B6", "22B7"])}}`,
+    `toggle:{interval:250,frames:${frames(["25CF", "25CB"])}}`,
   ],
 ];
 

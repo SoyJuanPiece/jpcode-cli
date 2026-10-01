@@ -123,6 +123,11 @@ Dos cosas distintas, y ninguna es «la interfaz»:
     Synthesizing…, Determining…, Percolating…* — en lugar de los chistes del motor
     (*Reticulating splines…*, *Warming up the AI hamsters…*), que rotaban cada 15 s y hacían que
     la línea pareciera rota. Las frases se cambian en `sync-jpcode.mjs` (`FRASES_TRABAJO`).
+    Y los frames del spinner son **◐ ◓ ◑ ◒** (U+25D0…U+25D3) en lugar del braille del motor:
+    el rango *Braille Patterns* no está en **Cascadia Mono** ni en **Consolas**, las fuentes por
+    defecto de Windows Terminal, y ahí en lugar del spinner se veía un cuadro con un
+    interrogante. Los elegidos salen del bloque *Geometric Shapes*, el mismo del ◆/●/○ que la
+    interfaz ya dibuja bien en esas fuentes.
   - **Auto-update del motor apagado** (`general.enableAutoUpdate: false`). El motor traía el suyo
     encendido y creía ser `@qwen-code/qwen-code@0.24.7`: leía `engine/package.json` y, al ver una
     versión nueva en npm, podía lanzar en segundo plano un `npm i -g` de **otro** paquete. jpcode
