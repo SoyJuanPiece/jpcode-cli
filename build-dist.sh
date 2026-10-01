@@ -1,41 +1,28 @@
 #!/usr/bin/env bash
-# Construye el paquete PUBLICABLE de jpcode y lo sube al repo público.
+# Construye el paquete de jpcode que se publica en npm.
 #
-#   bash build-dist.sh                  # construye, prueba y publica la release
-#   bash build-dist.sh --solo-build     # construye y prueba, sin publicar
+#   bash build-dist.sh                  # construye y prueba
 #   bash build-dist.sh v0.2.0           # versión a mano
 #
-# Para qué: el repo del código es privado, y GitHub no sirve los assets de un
-# repo privado sin autenticar. Este script genera el MISMO código minificado
-# (bun --minify, sin empaquetar, para no cambiar la estructura de ficheros) y lo
-# publica en un repo público, de forma que `curl | bash` funcione sin `gh`.
+# Lo llama publish-npm.sh, que es quien publica. Aquí NO se publica nada: esto
+# es el gate. Minifica el paquete con bun --minify (sin empaquetar, para no
+# cambiar la estructura de ficheros) y deja en dist/ el tarball que npm sube.
 #
 # Aviso honesto: minificar NO es proteger. El código tiene que ejecutarse en la
 # máquina de quien instala, así que viaja entero dentro del paquete; quita los
 # comentarios y los nombres, pero un `strings` lo devuelve a la superficie. Solo
 # evita que se lea de un vistazo.
 #
-# Lo que SÍ es serio: antes de publicar, el paquete minificado pasa el juego
-# completo de pruebas (209 aserciones). Si la minificación rompe algo, no se
-# publica nada.
+# Lo que SÍ es serio: el paquete minificado pasa el juego completo de pruebas
+# (209 aserciones). Si la minificación rompe algo, publish-npm.sh no publica.
 set -euo pipefail
 
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$AQUI"
 
-DIST_REPO="${JPCODE_DIST_REPO:-SoyJuanPiece/jpcode-dist}"
 ASSET="jpcode-app.tar.gz"
 
-PUBLICAR=1
-POSICIONALES=()
-for a in "$@"; do
-  case "$a" in
-    --solo-build) PUBLICAR=0 ;;
-    -*) echo "✗ opción desconocida: $a" >&2; exit 1 ;;
-    *) POSICIONALES+=("$a") ;;
-  esac
-done
-VERSION="${POSICIONALES[0]:-v$(node -p "require('./package.json').version")}"
+VERSION="${1:-v$(node -p "require('./package.json').version")}"
 PREFIJO="jpcode-cli-${VERSION#v}"
 
 command -v bun >/dev/null 2>&1 || { echo "✗ hace falta bun para minificar" >&2; exit 1; }
@@ -102,46 +89,10 @@ echo "   $BIEN aserciones en verde sobre el código minificado"
 
 echo "→ empaquetando…"
 tar -czf "$DIST/$ASSET" -C "$DIST" "$PREFIJO"
-cp "$AQUI/get.sh" "$DIST/get.sh"
-chmod +x "$DIST/get.sh"
-( cd "$DIST" && sha256sum "$ASSET" get.sh > SHA256SUMS )
+( cd "$DIST" && sha256sum "$ASSET" > SHA256SUMS )
 rm -rf "$TRABAJO" # el tarball ya lo tiene todo
 
 echo "→ artefactos:"
-( cd "$DIST" && ls -la "$ASSET" get.sh SHA256SUMS | awk '{print "   " $9 " · " $5 " bytes"}' )
+( cd "$DIST" && ls -la "$ASSET" SHA256SUMS | awk '{print "   " $9 " · " $5 " bytes"}' )
 
-if [ "$PUBLICAR" = 0 ]; then
-  echo "✅ construido en dist/ (sin publicar)"
-  exit 0
-fi
-
-command -v gh >/dev/null 2>&1 || { echo "✗ hace falta gh para publicar" >&2; exit 1; }
-if gh release view "$VERSION" -R "$DIST_REPO" >/dev/null 2>&1; then
-  echo "✗ la release $VERSION ya existe en $DIST_REPO" >&2
-  echo "    gh release delete $VERSION -R $DIST_REPO --yes --cleanup-tag" >&2
-  exit 1
-fi
-
-echo "→ publicando en $DIST_REPO…"
-gh release create "$VERSION" -R "$DIST_REPO" \
-  "$DIST/$ASSET" "$DIST/get.sh" "$DIST/SHA256SUMS" \
-  --target main \
-  --title "jpcode $VERSION" \
-  --notes "$(cat <<EOF
-Instalación de una línea (\`curl\`, sin \`gh\`, sin claves):
-
-\`\`\`bash
-curl -fsSL https://github.com/$DIST_REPO/releases/latest/download/get.sh | bash
-\`\`\`
-
-- \`$ASSET\` — el paquete que se instala (código minificado)
-- \`get.sh\` — el instalador
-- \`SHA256SUMS\` — y \`get.sh\` lo comprueba antes de descomprimir nada
-
-El código de este paquete va **minificado**, no es una versión compilada: sigue
-siendo JavaScript y se puede recuperar. Está así para no publicar el código
-fuente, que vive en un repo privado.
-EOF
-)"
-
-echo "✅ publicada: $(gh release view "$VERSION" -R "$DIST_REPO" --json url -q .url)"
+echo "✅ construido y probado en dist/ — lo publica publish-npm.sh"

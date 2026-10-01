@@ -8,47 +8,9 @@ Tu CLI de código, con la pinta de Claude Code, sobre **Qwen Code (Apache-2.0)**
 No hace falta nada más que **Node ≥ 22**: el motor viaja dentro del paquete, así que no hay que
 instalar Qwen Code aparte.
 
-Con **Homebrew** (macOS y Linux):
-
 ```bash
-brew install SoyJuanPiece/tap/jpcode
-```
-
-La fórmula vive en [SoyJuanPiece/homebrew-tap](https://github.com/SoyJuanPiece/homebrew-tap) y
-instala el paquete entero desde la release. Para actualizarla en cada release:
-
-```bash
-bash update-tap.sh
-```
-
-O de una línea, sin Homebrew. Baja el paquete de la última release, comprueba su SHA256, lo deja
-en `~/.jpcode/src` (permanente, nunca `/tmp`) y lanza el `install.sh` de dentro:
-
-```bash
-curl -fsSL https://github.com/SoyJuanPiece/jpcode-dist/releases/latest/download/get.sh | bash
-```
-
-`jpcode-dist` es un repo **público que solo tiene artefactos**: el código fuente vive aquí, en
-privado. Lo llena `build-dist.sh`, que minifica el paquete, le pasa el **juego completo de pruebas
-(209 aserciones)** y solo entonces lo publica.
-
-Ojo con la expectativa: **minificar no es proteger**. El código tiene que ejecutarse en la máquina
-de quien instala, así que viaja entero dentro del paquete; un `strings` lo devuelve a la superficie.
-Quita los comentarios y los nombres, y ya. Como cortina vale; como caja fuerte, no.
-
-Para clavar una versión o cambiar dónde se instala (expórtalas: `VAR=x cmd1 | cmd2` solo se las pasa
-a `cmd1`, y `get.sh` se ejecuta en el otro lado del tubo):
-
-```bash
-export JPCODE_VERSION=v0.1.1 JPCODE_SRC=~/jpcode
-curl -fsSL https://github.com/SoyJuanPiece/jpcode-dist/releases/latest/download/get.sh | bash
-```
-
-Y si algún día quieres el paquete del repo privado, con la misma `get.sh`:
-
-```bash
-JPCODE_REPO=SoyJuanPiece/jpcode-cli gh release download \
-  -R SoyJuanPiece/jpcode-cli -p get.sh -O - | bash
+npm install -g jpcode
+jpcode
 ```
 
 Y desde el código, si prefieres tenerlo a mano para tocar cosas:
@@ -56,13 +18,29 @@ Y desde el código, si prefieres tenerlo a mano para tocar cosas:
 ```bash
 git clone https://github.com/SoyJuanPiece/jpcode-cli.git
 cd jpcode-cli
-bash install.sh            # gateway + config + marca + parches + binario
+bash install.sh            # motor + piezas nativas + config + tema + binario
 jpcode                     # interactivo
 jpcode "explica esto"      # one-shot
 ```
 
-Solo necesita **Node ≥ 22**. El motor y el gateway viajan dentro del paquete, así que no hay
-dependencias que instalar.
+Ojo con la expectativa: **minificar no es proteger**. El paquete de npm va minificado, pero el
+código tiene que ejecutarse en la máquina de quien instala, así que viaja entero dentro; un
+`strings` lo devuelve a la superficie. Quita los comentarios y los nombres, y ya. Como cortina
+vale; como caja fuerte, no.
+
+### Publicar una versión
+
+```bash
+npm login          # una vez
+bash publish-npm.sh
+```
+
+`build-dist.sh` minifica y corre las **209 aserciones** sobre el resultado antes de que se suba
+nada: si la minificación rompe algo, no se publica.
+
+En CI lo hace `.github/workflows/publish-npm.yml` por OIDC, sin tokens ni secretos. La primera
+publicación de un paquete nuevo tiene que ser a mano: el Trusted Publisher se configura sobre un
+paquete que ya existe.
 
 **Clónalo siempre en una carpeta permanente.** `install.sh` enlaza el binario a la carpeta desde la
 que se ejecuta: si lo lanzas en `/tmp`, tu `jpcode` apunta a `/tmp` y se rompe cuando se vacíe.
@@ -101,14 +79,14 @@ que se ejecuta: si lo lanzas en `/tmp`, tu `jpcode` apunta a `/tmp` y se rompe c
 | `img-bridge.mjs` | Puente: servidor + página para pegar la imagen desde el navegador. |
 | `patch-jpcode-image-watch.mjs` | Adjunta sola en el prompt la imagen que llega del puente. |
 | `theme.json` | Paleta del tema `jpcode`. |
-| `install.sh` | Instala, aplica los parches de comportamiento y re-aplica tras `qwen update`. |
+| `install.sh` | Instalación desde el código: trae el motor, piezas nativas, config, tema y binario. |
 | `gateway/` | El gateway (proxy + catálogo + envoltorio `qwen`), sin dependencias. |
 | `sync-gateway.sh` | Refresca `gateway/` desde tu copia de trabajo de opencode-chat. |
-| `get.sh` | Instalador remoto: baja la release y lanza `install.sh`. |
-| `release.sh` | Publica la release del repo privado (tarball + `get.sh` + `SHA256SUMS`). |
-| `build-dist.sh` | Minifica, prueba y publica los artefactos en el repo público. |
+| `vendor-engine.sh` | Trae el motor a `engine/` y le aplica los 9 parches de jpcode en la construcción. |
+| `build-dist.sh` | Minifica y prueba el paquete (209 aserciones). Es el gate antes de publicar. |
+| `publish-npm.sh` | Publica en npm lo que dejó `build-dist.sh`, con npm o con `--bun`. |
 
-La parte «tipo OpenCode» son los parches que `install.sh` aplica sobre el Qwen Code instalado:
+La parte «tipo OpenCode» son los parches que `vendor-engine.sh` aplica al motor al traerlo:
 `patch-qwen-providers.mjs` (catálogo completo de models.dev),
 `patch-qwen-auth.mjs` (buscador en el diálogo de conexión), `patch-qwen-connect.mjs`
 (`/provider` como alias y abrir directo en el catálogo), `patch-qwen-search.mjs`
@@ -204,12 +182,9 @@ node patch-jpcode-clipboard.mjs           # aviso de pegado de imagen veraz
 node patch-jpcode-image-watch.mjs         # que jpcode adjunte lo que llega del puente
 node gateway/test.mjs                     # pruebas del gateway (209 aserciones)
 QWEN_HOME=~/.jpcode node sync-jpcode.mjs
-bash build-dist.sh                        # minifica, prueba y publica la release
-bash update-tap.sh                        # apunta la fórmula de Homebrew a esa release
+bash build-dist.sh                        # minifica y prueba (no publica)
+bash publish-npm.sh                       # y esto lo sube a npm
 ```
-
-`release.sh` queda **deprecado**: construía el tarball con `git archive`, que no incluye `engine/`
-(está ignorado por git), y publicó una `v0.1.0` sin motor. Ahora solo delega en `build-dist.sh`.
 
 ## Base legal
 

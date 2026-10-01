@@ -14,9 +14,9 @@
 # OIDC (sin tokens ni secretos) con npm. La publicación por OIDC solo la hace
 # npm, así que en CI no se usa --bun.
 #
-# Se publica el ÁRBOL MINIFICADO, el mismo que la release de GitHub: no se sube
-# el código fuente legible. Ojo con la expectativa de siempre — minificar no
-# esconde nada, el código tiene que ejecutarse en la máquina de quien instala.
+# Se publica el ÁRBOL MINIFICADO: no se sube el código fuente legible. Ojo con
+# la expectativa de siempre — minificar no esconde nada, el código tiene que
+# ejecutarse en la máquina de quien instala.
 set -euo pipefail
 
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -40,9 +40,9 @@ fi
 NOMBRE="$(node -p "require('./package.json').name")"
 VERSION="$(node -p "require('./package.json').version")"
 
-# 1) El mismo paquete y las mismas pruebas que la release de GitHub. Si la
-#    minificación rompe algo, build-dist.sh aborta y aquí no se publica nada.
-bash "$AQUI/build-dist.sh" --solo-build
+# 1) build-dist.sh minifica y corre las 209 aserciones sobre el resultado. Si la
+#    minificación rompe algo, aborta y aquí no se publica nada.
+bash "$AQUI/build-dist.sh"
 
 # 2) Montamos el paquete de npm desde el árbol ya minificado y probado.
 STAGE="$AQUI/dist/npm"
