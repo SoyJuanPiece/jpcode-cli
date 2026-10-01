@@ -12,17 +12,19 @@
  *   1. Crea ~/.jpcode la primera vez (heredando ~/.qwen si existía).
  *   2. Copia los comandos propios y fusiona tema y banner.
  *   3. Levanta el puente de imágenes del navegador.
- *   4. Levanta el gateway (el proxy que habla con los proveedores).
+ *   4. Se asegura de tener SU gateway (el proxy que habla con los proveedores):
+ *      si el puerto está libre lo levanta, y si lo ocupa otro gateway ajeno,
+ *      busca el siguiente libre y apunta los modelos ahí. Así jpcode no depende
+ *      de que nadie más tenga nada instalado ni corriendo.
  *   5. Refresca la lista de /model con lo que el gateway tenga usable.
  *   6. Arranca el motor.
  *
  * Antes esto último pasaba por un envoltorio de bash que buscaba un `qwen`
- * instalado y usaba `tmux` para el proxy. Ya no: el motor es nuestro y el proxy
- * se levanta en segundo plano desde aquí, así que no hacen falta ni bash ni tmux.
+ * instalado y usaba `tmux` para el proxy. Ya no hace falta ni lo uno ni lo otro.
  *
  * Variables:
  *   JPCODE_HOME          config (por defecto ~/.jpcode)
- *   OPENCODE_PROXY_PORT  puerto del gateway (por defecto 8096)
+ *   OPENCODE_PROXY_PORT  primer puerto a probar para el gateway (por defecto 8096)
  *   JPCODE_IMG_BRIDGE    0 desactiva el puente de imágenes
  *   JPCODE_IMG_PORT      puerto del puente (por defecto 8097)
  *   OPENCODE_GATEWAY_DIR gateway alternativo (por defecto el del paquete)
@@ -42,7 +44,6 @@ const GATEWAY =
   process.env.OPENCODE_GATEWAY_DIR ||
   (existsSync(join(AQUI, "gateway", "server.mjs")) ? join(AQUI, "gateway") : join(HOME, "studio", "opencode-chat"));
 const PUERTO = Number(process.env.OPENCODE_PROXY_PORT || 8096);
-const SALUD = `http://127.0.0.1:${PUERTO}/api/status`;
 
 const aviso = (m) => console.error(`→ jpcode: ${m}`);
 
@@ -113,63 +114,98 @@ async function arrancarPuente() {
 }
 await arrancarPuente();
 
-/* 5) El gateway: el proxy que traduce a todos los proveedores. Antes lo levantaba
-   un script de bash con tmux; ahora se lanza aquí, en segundo plano. */
-async function gatewayVivo() {
+/* 5) El gateway: el proxy que traduce a todos los proveedores. */
+async function responde(puerto) {
   try {
-    const r = await fetch(SALUD, { signal: AbortSignal.timeout(1000) });
+    const r = await fetch(`http://127.0.0.1:${puerto}/api/status`, { signal: AbortSignal.timeout(1000) });
     return r.ok;
   } catch {
     return false;
   }
 }
 
-async function arrancarGateway() {
-  if (await gatewayVivo()) return true;
+/**
+ * ¿El gateway que responde en ese puerto es el NUESTRO? La única prueba fiable es
+ * que nuestra clave abra su /v1/models. Sin esto, jpcode reutilizaría el gateway
+ * de otra instalación (con otra clave) y los modelos fallarían con un error raro.
+ */
+async function esNuestro(puerto, k) {
+  if (!k) return false;
+  try {
+    const r = await fetch(`http://127.0.0.1:${puerto}/v1/models`, {
+      headers: { Authorization: `Bearer ${k}` },
+      signal: AbortSignal.timeout(1500),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Primer puerto donde podamos mandar: libre, o ya ocupado por el nuestro. */
+async function elegirPuerto() {
+  const k = clave(join(GATEWAY, ".api-key"));
+  // 8097 lo usa el puente de imágenes, así que no se prueba.
+  for (const p of [PUERTO, PUERTO + 2, PUERTO + 3, PUERTO + 4, PUERTO + 5]) {
+    if (!(await responde(p))) return p;
+    if (await esNuestro(p, k)) return p;
+    aviso(`el puerto ${p} lo ocupa otro gateway; pruebo el siguiente`);
+  }
+  return null;
+}
+
+const puerto = await elegirPuerto();
+let gatewayListo = false;
+
+if (puerto === null) {
+  aviso("no encuentro ningún puerto libre para el gateway.");
+  aviso(`arráncalo a mano:  node ${join(GATEWAY, "server.mjs")} <puerto>`);
+} else if (await responde(puerto)) {
+  gatewayListo = true; // ya era nuestro
+} else {
   const server = join(GATEWAY, "server.mjs");
   if (!existsSync(server)) {
     aviso(`no encuentro el gateway en ${GATEWAY}`);
-    return false;
+  } else {
+    mkdirSync(join(JP_HOME, "tmp"), { recursive: true });
+    const registro = openSync(join(JP_HOME, "tmp", "gateway.log"), "a");
+    const zen = clave(join(GATEWAY, ".zen-key"));
+    spawn(process.execPath, [server, String(puerto)], {
+      detached: true,
+      cwd: GATEWAY,
+      stdio: ["ignore", registro, registro],
+      env: { ...process.env, HOST: "127.0.0.1", ...(zen ? { OPENCODE_API_KEY: zen } : {}) },
+    }).unref();
+
+    for (let i = 0; i < 60; i++) {
+      if (await responde(puerto)) {
+        gatewayListo = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    if (gatewayListo) aviso(`gateway en el puerto ${puerto}`);
+    else aviso(`el gateway no respondió en el puerto ${puerto}; mira ${join(JP_HOME, "tmp", "gateway.log")}`);
   }
-
-  mkdirSync(join(JP_HOME, "tmp"), { recursive: true });
-  const registro = openSync(join(JP_HOME, "tmp", "gateway.log"), "a");
-  const zen = clave(join(GATEWAY, ".zen-key"));
-
-  const p = spawn(process.execPath, [server, String(PUERTO)], {
-    detached: true,
-    cwd: GATEWAY,
-    stdio: ["ignore", registro, registro],
-    env: { ...process.env, HOST: "127.0.0.1", ...(zen ? { OPENCODE_API_KEY: zen } : {}) },
-  });
-  p.unref();
-
-  // Hasta 15 s de espera, en pasos de 250 ms (como hacía el envoltorio).
-  for (let i = 0; i < 60; i++) {
-    if (await gatewayVivo()) return true;
-    await new Promise((r) => setTimeout(r, 250));
-  }
-  return false;
 }
 
-const hayGateway = await arrancarGateway();
-if (!hayGateway) {
-  aviso(`el gateway no responde en ${SALUD}`);
-  aviso(`arráncalo a mano:  node ${join(GATEWAY, "server.mjs")} ${PUERTO}`);
-}
+const URL_GATEWAY = `http://127.0.0.1:${puerto ?? PUERTO}/v1`;
 
 /* 6) La lista de /model se rellena con lo que el gateway tenga usable AHORA
-   (gratis de Zen + proveedores conectados). OPENCODE_SYNC_MODELS=0 la desactiva. */
-if (hayGateway && process.env.OPENCODE_SYNC_MODELS !== "0" && existsSync(join(GATEWAY, "sync-qwen-models.mjs"))) {
+   (gratis de Zen + proveedores conectados). Los modelos se apuntan a NUESTRO
+   puerto, no al de siempre: si el 8096 estaba ocupado, los ajustes tienen que
+   reflejarlo o el motor pediría al gateway equivocado.
+   OPENCODE_SYNC_MODELS=0 la desactiva. */
+if (gatewayListo && process.env.OPENCODE_SYNC_MODELS !== "0" && existsSync(join(GATEWAY, "sync-qwen-models.mjs"))) {
   spawnSync(process.execPath, [join(GATEWAY, "sync-qwen-models.mjs")], {
     stdio: "ignore",
-    env: { ...process.env, QWEN_SETTINGS: join(JP_HOME, "settings.json") },
+    env: { ...process.env, QWEN_SETTINGS: join(JP_HOME, "settings.json"), OPENCODE_GATEWAY_URL: URL_GATEWAY },
   });
 }
 
 /* 7) La clave del gateway va por entorno: el motor no guarda credenciales, lee
    process.env[envKey] y en los ajustes cada modelo declara OPENCODE_GATEWAY_KEY. */
-const claveGateway = clave(join(GATEWAY, ".api-key"));
+const claveGateway = clave(join(GATEWAY, ".api-key")) || process.env.OPENCODE_GATEWAY_KEY;
 
 /* 8) El motor, que viaja dentro. */
 const entrada = join(ENGINE, "cli-entry.js");
