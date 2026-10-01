@@ -53,21 +53,25 @@ mkdir -p "$TRABAJO"
 git archive HEAD | tar -x -C "$TRABAJO"
 
 echo "→ minificando…"
-N=0
-while IFS= read -r -d '' f; do
+# La lista se toma ENTERA antes de empezar: los temporales que se crean dentro
+# del bucle no pueden colarse en la propia enumeración de find.
+mapfile -d '' FICHEROS < <(find "$TRABAJO" -name '*.mjs' -print0)
+for f in "${FICHEROS[@]}"; do
   primera="$(head -1 "$f")"
-  if ! bun build "$f" --minify --target=node --no-bundle --outfile="$f.min" >/dev/null 2>&1; then
+  # El temporal TIENE que acabar en .mjs: node --check decide ESM o CommonJS por
+  # la extensión, y con otra se queja de los `import` de un fichero que está bien.
+  tmp="$f.min.mjs"
+  if ! bun build "$f" --minify --target=node --no-bundle --outfile="$tmp" >/dev/null 2>&1; then
     echo "✗ bun no pudo minificar $f" >&2; exit 1
   fi
   # bun se come el shebang, y el binario se ejecuta directo (va enlazado en el PATH).
   case "$primera" in
-    '#!'*) { printf '%s\n' "$primera"; cat "$f.min"; } > "$f.tmp"; mv "$f.tmp" "$f.min" ;;
+    '#!'*) { printf '%s\n' "$primera"; cat "$tmp"; } > "$tmp.shebang"; mv "$tmp.shebang" "$tmp" ;;
   esac
-  node --check "$f.min" >/dev/null 2>&1 || { echo "✗ el minificado de $f no parsea" >&2; exit 1; }
-  mv "$f.min" "$f"
-  N=$((N + 1))
-done < <(find "$TRABAJO" -name '*.mjs' -print0)
-echo "   $N ficheros .mjs"
+  node --check "$tmp" >/dev/null 2>&1 || { echo "✗ el minificado de $f no parsea" >&2; exit 1; }
+  mv "$tmp" "$f"
+done
+echo "   ${#FICHEROS[@]} ficheros .mjs"
 
 # Los .js de navegador se quedan como están: el propio test los compara por texto
 # y minificarlos lo rompería sin ganar nada (son la interfaz, no la receta).
