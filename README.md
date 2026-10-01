@@ -16,7 +16,7 @@ Y luego jpcode de una línea. Baja el tarball de la última release, lo deja en
 
 ```bash
 # el repo es privado, así que la descarga va por tu sesión de gh
-gh release download latest -R SoyJuanPiece/jpcode-cli -p get.sh -O - | bash
+gh release download -R SoyJuanPiece/jpcode-cli -p get.sh -O - | bash
 ```
 
 Si algún día el repo pasa a público, esto mismo basta sin `gh`:
@@ -28,7 +28,8 @@ curl -fsSL https://github.com/SoyJuanPiece/jpcode-cli/releases/latest/download/g
 Para clavar una versión o cambiar dónde se instala:
 
 ```bash
-JPCODE_VERSION=v0.1.0 JPCODE_SRC=~/jpcode gh release download … | bash
+JPCODE_VERSION=v0.1.0 JPCODE_SRC=~/jpcode \
+  gh release download -R SoyJuanPiece/jpcode-cli -p get.sh -O - | bash
 ```
 
 Y desde el código, si prefieres tenerlo a mano para tocar cosas:

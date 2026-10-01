@@ -38,12 +38,12 @@ trap 'rm -rf "$TMP"' EXIT
 bajar() {
   local nombre="$1" destino="$2"
   # 1) Con gh. Es la ÚNICA forma si el repo es privado.
+  #    Ojo: sin tag, gh usa la última release. Pasarle la palabra "latest" hace
+  #    que busque un tag que se llame así y falle con "release not found".
   if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
-    if [ "$VERSION" = "latest" ]; then
-      gh release download --repo "$REPO" --pattern "$nombre" --output "$destino" --clobber >/dev/null 2>&1 && return 0
-    else
-      gh release download "$VERSION" --repo "$REPO" --pattern "$nombre" --output "$destino" --clobber >/dev/null 2>&1 && return 0
-    fi
+    local args=(--repo "$REPO" --pattern "$nombre" --output "$destino" --clobber)
+    if [ "$VERSION" != "latest" ]; then args=("$VERSION" "${args[@]}"); fi
+    if gh release download "${args[@]}" >/dev/null 2>&1; then return 0; fi
     log "gh no pudo bajar $nombre; pruebo la URL directa"
   fi
   # 2) Con curl. Vale cuando el repo es público.
