@@ -1,6 +1,6 @@
 {
   "name": "@juanpiecedev/jpcode",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "jpcode — el CLI de código de JuanPiece: pinta de Claude Code, modelos gratis y tu propia API key, con gateway local.",
   "type": "module",
   "bin": {
@@ -43,7 +43,8 @@
   },
   "os": [
     "linux",
-    "darwin"
+    "darwin",
+    "win32"
   ],
   "engines": {
     "node": ">=22"
