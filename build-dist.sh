@@ -52,10 +52,20 @@ mkdir -p "$TRABAJO"
 # Solo lo commiteado: nada ignorado (ni .api-key, ni .zen-key, ni caché) puede colarse.
 git archive HEAD | tar -x -C "$TRABAJO"
 
+# El motor NO está en git (son 95 MB de artefacto, no fuente): se trae con
+# vendor-engine.sh y se copia tal cual, sin minificar. Ya viene construido y
+# minificarlo no aportaría nada y podría romperlo.
+if [ ! -f "$AQUI/engine/cli-entry.js" ]; then
+  echo "→ falta el motor; lo traigo con vendor-engine.sh"
+  bash "$AQUI/vendor-engine.sh" >/dev/null || { echo "✗ no pude traer el motor" >&2; exit 1; }
+fi
+tar -cf - -C "$AQUI" engine | tar -xf - -C "$TRABAJO"
+echo "→ motor incluido ($(du -sh "$TRABAJO/engine" | cut -f1), $(find "$TRABAJO/engine" -type f | wc -l) ficheros)"
+
 echo "→ minificando…"
 # La lista se toma ENTERA antes de empezar: los temporales que se crean dentro
 # del bucle no pueden colarse en la propia enumeración de find.
-mapfile -d '' FICHEROS < <(find "$TRABAJO" -name '*.mjs' -print0)
+mapfile -d '' FICHEROS < <(find "$TRABAJO" -name '*.mjs' -not -path "$TRABAJO/engine/*" -print0)
 for f in "${FICHEROS[@]}"; do
   primera="$(head -1 "$f")"
   # El temporal TIENE que acabar en .mjs: node --check decide ESM o CommonJS por

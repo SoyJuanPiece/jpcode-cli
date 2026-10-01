@@ -1,23 +1,34 @@
 #!/usr/bin/env node
 /**
- * jpcode — CLI de código con la pinta de Claude Code.
+ * jpcode — el CLI de código de JuanPiece.
  *
- * Es una versión re-marcada de Qwen Code (Apache-2.0): este bin prepara la
- * identidad, la config propia (~/.jpcode) y arranca el CLI apuntando al gateway
- * de opencode-chat (modelos gratis de Zen + catálogo de models.dev).
+ * Arranca el MOTOR que viaja dentro del propio paquete (`engine/`), que ya viene
+ * parcheado desde la construcción: aquí no se parchea nada del sistema.
  *
  *   jpcode                 # interactivo
  *   jpcode "explica esto"  # one-shot
  *
+ * Lo que hace, en orden:
+ *   1. Crea ~/.jpcode la primera vez (heredando ~/.qwen si existía).
+ *   2. Copia los comandos propios y fusiona tema y banner.
+ *   3. Levanta el puente de imágenes del navegador.
+ *   4. Levanta el gateway (el proxy que habla con los proveedores).
+ *   5. Refresca la lista de /model con lo que el gateway tenga usable.
+ *   6. Arranca el motor.
+ *
+ * Antes esto último pasaba por un envoltorio de bash que buscaba un `qwen`
+ * instalado y usaba `tmux` para el proxy. Ya no: el motor es nuestro y el proxy
+ * se levanta en segundo plano desde aquí, así que no hacen falta ni bash ni tmux.
+ *
  * Variables:
- *   JPCODE_HOME          config propia (por defecto ~/.jpcode)
- *   OPENCODE_CHAT_DIR    carpeta con server.mjs/.api-key (por defecto ~/studio/opencode-chat)
+ *   JPCODE_HOME          config (por defecto ~/.jpcode)
  *   OPENCODE_PROXY_PORT  puerto del gateway (por defecto 8096)
- *   JPCODE_IMG_BRIDGE    0 desactiva el puente de imágenes del navegador
+ *   JPCODE_IMG_BRIDGE    0 desactiva el puente de imágenes
  *   JPCODE_IMG_PORT      puerto del puente (por defecto 8097)
+ *   OPENCODE_GATEWAY_DIR gateway alternativo (por defecto el del paquete)
  */
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, cpSync, openSync } from "node:fs";
+import { existsSync, mkdirSync, cpSync, openSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
@@ -26,46 +37,53 @@ const AQUI = dirname(dirname(fileURLToPath(import.meta.url))); // .../jpcode
 const HOME = homedir();
 const JP_HOME = process.env.JPCODE_HOME || join(HOME, ".jpcode");
 const QWEN_LEGACY = join(HOME, ".qwen");
-// El gateway viaja con el repo (gateway/) para que un clon limpio funcione. Tu copia de
-// trabajo tiene prioridad: es la que usa el proxy que ya esté corriendo, y junto a su
-// `.api-key` está la clave que el envoltorio necesita exportar. OPENCODE_CHAT_DIR manda.
-const CHAT_DIR =
-  process.env.OPENCODE_CHAT_DIR ||
-  (existsSync(join(HOME, "studio", "opencode-chat", "server.mjs"))
-    ? join(HOME, "studio", "opencode-chat")
-    : join(AQUI, "gateway"));
+const ENGINE = join(AQUI, "engine");
+const GATEWAY =
+  process.env.OPENCODE_GATEWAY_DIR ||
+  (existsSync(join(AQUI, "gateway", "server.mjs")) ? join(AQUI, "gateway") : join(HOME, "studio", "opencode-chat"));
+const PUERTO = Number(process.env.OPENCODE_PROXY_PORT || 8096);
+const SALUD = `http://127.0.0.1:${PUERTO}/api/status`;
 
-/* 1) Primer arranque: hereda la config/comandos de Qwen (migración de una vez). */
+const aviso = (m) => console.error(`→ jpcode: ${m}`);
+
+/** Lee un fichero de clave y devuelve undefined si no está o está vacío. */
+function clave(ruta) {
+  try {
+    const v = readFileSync(ruta, "utf8").trim();
+    return v || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/* 1) Config inicial: de ~/.qwen si existía, y si no de la plantilla del gateway,
+   que es la que apunta los modelos al proxy. Sin esto, arrancaría sin modelos. */
 if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(QWEN_LEGACY, "settings.json"))) {
   mkdirSync(JP_HOME, { recursive: true });
   cpSync(QWEN_LEGACY, JP_HOME, { recursive: true });
-  console.error(`→ jpcode: config inicial copiada de ${QWEN_LEGACY} a ${JP_HOME}`);
+  aviso(`config inicial copiada de ${QWEN_LEGACY} a ${JP_HOME}`);
 }
-
-/* 1b) Máquina nueva, sin ~/.qwen: siembra con la plantilla del gateway, que es la que
-   declara los modelos apuntando al proxy. Sin esto arrancaría sin ningún modelo. */
-if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(CHAT_DIR, "qwen-settings.json"))) {
+if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(GATEWAY, "qwen-settings.json"))) {
   mkdirSync(JP_HOME, { recursive: true });
-  cpSync(join(CHAT_DIR, "qwen-settings.json"), join(JP_HOME, "settings.json"));
-  console.error(`→ jpcode: config inicial sembrada desde ${CHAT_DIR}/qwen-settings.json`);
+  cpSync(join(GATEWAY, "qwen-settings.json"), join(JP_HOME, "settings.json"));
+  aviso("config inicial sembrada desde la plantilla del gateway");
 }
 
-/* 2) Comandos propios (/provider, /modelos…) por si llegaron tras el primer arranque. */
-const comandosOrigen = join(QWEN_LEGACY, "commands");
-if (existsSync(comandosOrigen) && !existsSync(join(JP_HOME, "commands"))) {
-  cpSync(comandosOrigen, join(JP_HOME, "commands"), { recursive: true });
+/* 2) Comandos propios, que llegan con el paquete. */
+const COMANDOS_ORIGEN = join(GATEWAY, "qwen-commands");
+if (existsSync(COMANDOS_ORIGEN) && !existsSync(join(JP_HOME, "commands"))) {
+  cpSync(COMANDOS_ORIGEN, join(JP_HOME, "commands"), { recursive: true });
 }
 
-/* 3) Identidad visual (idempotente): tema jpcode + banner propio. */
+/* 3) Tema y banner (idempotente). */
 spawnSync(process.execPath, [join(AQUI, "sync-jpcode.mjs")], {
   env: { ...process.env, QWEN_SETTINGS: join(JP_HOME, "settings.json") },
   stdio: "ignore",
 });
 
-/* 4) Puente de imágenes del navegador (ver img-bridge.mjs). El terminal web no puede
-   pegar imágenes, así que se levanta un servidor pequeñito que sirve una página: pegas
-   la captura ahí y el vigilante del prompt la adjunta sola. Si ya está corriendo (mismo
-   puerto, p. ej. de otro jpcode abierto), se reutiliza. */
+/* 4) Puente de imágenes del navegador. El terminal web no puede pegar capturas,
+   así que se sirve una página: pegas ahí y el vigilante la adjunta sola. Si ya
+   hay uno escuchando (otro jpcode abierto), se reutiliza. */
 async function arrancarPuente() {
   if (process.env.JPCODE_IMG_BRIDGE === "0") return;
   const script = join(AQUI, "img-bridge.mjs");
@@ -74,40 +92,103 @@ async function arrancarPuente() {
 
   try {
     const r = await fetch(`http://127.0.0.1:${puerto}/status`, { signal: AbortSignal.timeout(400) });
-    if (r.ok) return; // ya hay un puente escuchando
-  } catch { /* nadie escucha: lo arrancamos */ }
+    if (r.ok) return;
+  } catch {
+    /* nadie escucha: lo arrancamos */
+  }
 
   try {
     mkdirSync(join(JP_HOME, "tmp"), { recursive: true });
     const registro = openSync(join(JP_HOME, "tmp", "img-bridge.log"), "a");
-    const p = spawn(process.execPath, [script], {
+    spawn(process.execPath, [script], {
       detached: true,
       stdio: ["ignore", registro, registro],
       env: { ...process.env, QWEN_HOME: JP_HOME },
-    });
-    p.unref();
+    }).unref();
     const url = process.env.WEB_HOST ? `https://${puerto}-${process.env.WEB_HOST}/` : `http://127.0.0.1:${puerto}/`;
-    console.error(`→ jpcode: puente de imágenes en ${url}`);
+    aviso(`puente de imágenes en ${url}`);
   } catch (e) {
-    console.error(`→ jpcode: no pude arrancar el puente de imágenes (${e.message})`);
+    aviso(`no pude arrancar el puente de imágenes (${e.message})`);
   }
 }
 await arrancarPuente();
 
-/* 5) Arranca por el envoltorio del gateway (levanta el proxy y pasa la clave). */
-const wrapper = join(CHAT_DIR, "qwen");
-if (!existsSync(wrapper)) {
-  console.error(`⚠️  No encuentro el gateway: falta ${wrapper}`);
-  console.error(`    Debería venir en ${join(AQUI, "gateway")}; si usas tu propia copia, define OPENCODE_CHAT_DIR=/ruta/a/opencode-chat`);
+/* 5) El gateway: el proxy que traduce a todos los proveedores. Antes lo levantaba
+   un script de bash con tmux; ahora se lanza aquí, en segundo plano. */
+async function gatewayVivo() {
+  try {
+    const r = await fetch(SALUD, { signal: AbortSignal.timeout(1000) });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function arrancarGateway() {
+  if (await gatewayVivo()) return true;
+  const server = join(GATEWAY, "server.mjs");
+  if (!existsSync(server)) {
+    aviso(`no encuentro el gateway en ${GATEWAY}`);
+    return false;
+  }
+
+  mkdirSync(join(JP_HOME, "tmp"), { recursive: true });
+  const registro = openSync(join(JP_HOME, "tmp", "gateway.log"), "a");
+  const zen = clave(join(GATEWAY, ".zen-key"));
+
+  const p = spawn(process.execPath, [server, String(PUERTO)], {
+    detached: true,
+    cwd: GATEWAY,
+    stdio: ["ignore", registro, registro],
+    env: { ...process.env, HOST: "127.0.0.1", ...(zen ? { OPENCODE_API_KEY: zen } : {}) },
+  });
+  p.unref();
+
+  // Hasta 15 s de espera, en pasos de 250 ms (como hacía el envoltorio).
+  for (let i = 0; i < 60; i++) {
+    if (await gatewayVivo()) return true;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return false;
+}
+
+const hayGateway = await arrancarGateway();
+if (!hayGateway) {
+  aviso(`el gateway no responde en ${SALUD}`);
+  aviso(`arráncalo a mano:  node ${join(GATEWAY, "server.mjs")} ${PUERTO}`);
+}
+
+/* 6) La lista de /model se rellena con lo que el gateway tenga usable AHORA
+   (gratis de Zen + proveedores conectados). OPENCODE_SYNC_MODELS=0 la desactiva. */
+if (hayGateway && process.env.OPENCODE_SYNC_MODELS !== "0" && existsSync(join(GATEWAY, "sync-qwen-models.mjs"))) {
+  spawnSync(process.execPath, [join(GATEWAY, "sync-qwen-models.mjs")], {
+    stdio: "ignore",
+    env: { ...process.env, QWEN_SETTINGS: join(JP_HOME, "settings.json") },
+  });
+}
+
+/* 7) La clave del gateway va por entorno: el motor no guarda credenciales, lee
+   process.env[envKey] y en los ajustes cada modelo declara OPENCODE_GATEWAY_KEY. */
+const claveGateway = clave(join(GATEWAY, ".api-key"));
+
+/* 8) El motor, que viaja dentro. */
+const entrada = join(ENGINE, "cli-entry.js");
+if (!existsSync(entrada)) {
+  console.error(`⚠️  jpcode: falta el motor (${entrada}).`);
+  console.error("    En un clon del código se trae con:  bash vendor-engine.sh");
   process.exit(127);
 }
 
-const hijo = spawn(wrapper, process.argv.slice(2), {
+const hijo = spawn(process.execPath, [entrada, ...process.argv.slice(2)], {
   stdio: "inherit",
-  env: { ...process.env, QWEN_HOME: JP_HOME },
+  env: {
+    ...process.env,
+    QWEN_HOME: JP_HOME,
+    ...(claveGateway ? { OPENCODE_GATEWAY_KEY: claveGateway } : {}),
+  },
 });
 hijo.on("error", (e) => {
-  console.error(`⚠️  no pude arrancar ${wrapper}: ${e.message}`);
+  console.error(`⚠️  jpcode: no pude arrancar el motor: ${e.message}`);
   process.exit(127);
 });
 hijo.on("exit", (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
