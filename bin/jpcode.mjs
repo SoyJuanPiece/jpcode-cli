@@ -26,13 +26,28 @@ const AQUI = dirname(dirname(fileURLToPath(import.meta.url))); // .../jpcode
 const HOME = homedir();
 const JP_HOME = process.env.JPCODE_HOME || join(HOME, ".jpcode");
 const QWEN_LEGACY = join(HOME, ".qwen");
-const CHAT_DIR = process.env.OPENCODE_CHAT_DIR || join(HOME, "studio", "opencode-chat");
+// El gateway viaja con el repo (gateway/) para que un clon limpio funcione. Tu copia de
+// trabajo tiene prioridad: es la que usa el proxy que ya esté corriendo, y junto a su
+// `.api-key` está la clave que el envoltorio necesita exportar. OPENCODE_CHAT_DIR manda.
+const CHAT_DIR =
+  process.env.OPENCODE_CHAT_DIR ||
+  (existsSync(join(HOME, "studio", "opencode-chat", "server.mjs"))
+    ? join(HOME, "studio", "opencode-chat")
+    : join(AQUI, "gateway"));
 
 /* 1) Primer arranque: hereda la config/comandos de Qwen (migración de una vez). */
 if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(QWEN_LEGACY, "settings.json"))) {
   mkdirSync(JP_HOME, { recursive: true });
   cpSync(QWEN_LEGACY, JP_HOME, { recursive: true });
   console.error(`→ jpcode: config inicial copiada de ${QWEN_LEGACY} a ${JP_HOME}`);
+}
+
+/* 1b) Máquina nueva, sin ~/.qwen: siembra con la plantilla del gateway, que es la que
+   declara los modelos apuntando al proxy. Sin esto arrancaría sin ningún modelo. */
+if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(CHAT_DIR, "qwen-settings.json"))) {
+  mkdirSync(JP_HOME, { recursive: true });
+  cpSync(join(CHAT_DIR, "qwen-settings.json"), join(JP_HOME, "settings.json"));
+  console.error(`→ jpcode: config inicial sembrada desde ${CHAT_DIR}/qwen-settings.json`);
 }
 
 /* 2) Comandos propios (/provider, /modelos…) por si llegaron tras el primer arranque. */
@@ -82,7 +97,8 @@ await arrancarPuente();
 /* 5) Arranca por el envoltorio del gateway (levanta el proxy y pasa la clave). */
 const wrapper = join(CHAT_DIR, "qwen");
 if (!existsSync(wrapper)) {
-  console.error(`⚠️  No encuentro ${wrapper}. Clona/instala opencode-chat o define OPENCODE_CHAT_DIR=/ruta`);
+  console.error(`⚠️  No encuentro el gateway: falta ${wrapper}`);
+  console.error(`    Debería venir en ${join(AQUI, "gateway")}; si usas tu propia copia, define OPENCODE_CHAT_DIR=/ruta/a/opencode-chat`);
   process.exit(127);
 }
 

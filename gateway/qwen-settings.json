@@ -1,0 +1,91 @@
+{
+  "modelProviders": {
+    "opencode-zen": [
+      {
+        "id": "big-pickle",
+        "name": "Zen gratis · big-pickle",
+        "description": "Modelo gratis de Zen, vía el gateway.",
+        "baseUrl": "http://127.0.0.1:8096/v1",
+        "envKey": "OPENCODE_GATEWAY_KEY"
+      },
+      {
+        "id": "mimo-v2.6-flash-free",
+        "name": "Zen gratis · mimo-v2.6-flash-free",
+        "description": "Modelo gratis de Zen, vía el gateway.",
+        "baseUrl": "http://127.0.0.1:8096/v1",
+        "envKey": "OPENCODE_GATEWAY_KEY"
+      },
+      {
+        "id": "longcat-2.5-preview-free",
+        "name": "Zen gratis · longcat-2.5-preview-free",
+        "description": "Modelo gratis de Zen, vía el gateway.",
+        "baseUrl": "http://127.0.0.1:8096/v1",
+        "envKey": "OPENCODE_GATEWAY_KEY"
+      },
+      {
+        "id": "nemotron-3-ultra-free",
+        "name": "Zen gratis · nemotron-3-ultra-free",
+        "description": "Modelo gratis de Zen, vía el gateway.",
+        "baseUrl": "http://127.0.0.1:8096/v1",
+        "envKey": "OPENCODE_GATEWAY_KEY"
+      },
+      {
+        "id": "mimo-v2.5-free",
+        "name": "Zen gratis · mimo-v2.5-free",
+        "description": "Modelo gratis de Zen, vía el gateway.",
+        "baseUrl": "http://127.0.0.1:8096/v1",
+        "envKey": "OPENCODE_GATEWAY_KEY"
+      },
+      {
+        "id": "space-bunny-free",
+        "name": "Zen gratis · space-bunny-free",
+        "description": "Modelo gratis de Zen, vía el gateway.",
+        "baseUrl": "http://127.0.0.1:8096/v1",
+        "envKey": "OPENCODE_GATEWAY_KEY"
+      },
+      {
+        "id": "nemotron-3.5-lightning-free",
+        "name": "Zen gratis · nemotron-3.5-lightning-free",
+        "description": "Modelo gratis de Zen, vía el gateway.",
+        "baseUrl": "http://127.0.0.1:8096/v1",
+        "envKey": "OPENCODE_GATEWAY_KEY"
+      },
+      {
+        "id": "muse-spark-1.3-contributor-free",
+        "name": "Zen gratis · muse-spark-1.3-contributor-free",
+        "description": "Modelo gratis de Zen, vía el gateway.",
+        "baseUrl": "http://127.0.0.1:8096/v1",
+        "envKey": "OPENCODE_GATEWAY_KEY"
+      },
+      {
+        "id": "muse-spark-1.2-contributor-free",
+        "name": "Zen gratis · muse-spark-1.2-contributor-free",
+        "description": "Modelo gratis de Zen, vía el gateway.",
+        "baseUrl": "http://127.0.0.1:8096/v1",
+        "envKey": "OPENCODE_GATEWAY_KEY"
+      },
+      {
+        "id": "ling-3.0-flash-fin-free",
+        "name": "Zen gratis · ling-3.0-flash-fin-free",
+        "description": "Modelo gratis de Zen, vía el gateway.",
+        "baseUrl": "http://127.0.0.1:8096/v1",
+        "envKey": "OPENCODE_GATEWAY_KEY"
+      }
+    ]
+  },
+  "security": {
+    "auth": {
+      "selectedType": "openai"
+    }
+  },
+  "model": {
+    "name": "big-pickle"
+  },
+  "$version": 4,
+  "ui": {
+    "autoModeAcknowledged": true
+  },
+  "providerProtocol": {
+    "opencode-zen": "openai"
+  }
+}

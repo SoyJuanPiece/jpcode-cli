@@ -10,3 +10,11 @@ tmp/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Lo que el gateway (gateway/) genera al arrancar: NUNCA se sube.
+# .api-key se autogenera solo la primera vez; .zen-key es TU clave de Zen.
+gateway/.api-key
+gateway/.zen-key
+gateway/.cache/
+gateway/.bin/
+gateway/*.log

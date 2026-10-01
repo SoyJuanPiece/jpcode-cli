@@ -4,10 +4,15 @@ Tu CLI de código, con la pinta de Claude Code, sobre **Qwen Code (Apache-2.0)**
 `opencode-chat` (modelos gratis de Zen + el catálogo de models.dev).
 
 ```bash
-bash jpcode/install.sh     # rebrandea + siembra ~/.jpcode + enlaza el binario
+git clone https://github.com/SoyJuanPiece/jpcode-cli.git
+cd jpcode-cli
+bash install.sh            # gateway + config + marca + parches + binario
 jpcode                     # interactivo
 jpcode "explica esto"      # one-shot
 ```
+
+Solo necesita **Node ≥ 18 y Qwen Code** (`npm i -g @qwen-code/qwen-code`). El gateway viaja
+dentro del repo y no tiene dependencias.
 
 ## Qué incluye
 
@@ -44,15 +49,38 @@ jpcode "explica esto"      # one-shot
 | `patch-jpcode-image-watch.mjs` | Adjunta sola en el prompt la imagen que llega del puente. |
 | `theme.json` | Paleta del tema `jpcode`. |
 | `install.sh` | Instala, aplica los parches de comportamiento y re-aplica tras `qwen update`. |
+| `gateway/` | El gateway (proxy + catálogo + envoltorio `qwen`), sin dependencias. |
+| `sync-gateway.sh` | Refresca `gateway/` desde tu copia de trabajo de opencode-chat. |
 
-La parte «tipo OpenCode» son los parches del gateway (en `opencode-chat/`), que `install.sh`
-aplica sobre el Qwen Code instalado: `patch-qwen-providers.mjs` (catálogo completo),
+La parte «tipo OpenCode» son los parches que `install.sh` aplica sobre el Qwen Code instalado:
+`patch-qwen-providers.mjs` (catálogo completo de models.dev),
 `patch-qwen-auth.mjs` (buscador en el diálogo de conexión), `patch-qwen-connect.mjs`
 (`/provider` como alias y abrir directo en el catálogo), `patch-qwen-search.mjs`
 (buscador en `/model`), `patch-qwen-model-sections.mjs` (`/model` por proveedores, en dos
 niveles) y `patch-qwen-discover.mjs` (**Custom Provider**: pegas tu Base URL y tu API key y los
 modelos se detectan solos, como en OpenCode). El envoltorio del gateway refresca la lista de
 `/model` en cada arranque.
+
+### El gateway y `gateway/`
+
+`jpcode` no habla con los proveedores directamente: arranca por el envoltorio `qwen` del gateway,
+que levanta el proxy en el puerto 8096, le inyecta la clave y refresca la lista de modelos. Por eso
+`bin/jpcode.mjs` no puede funcionar sin él, y por eso **viaja dentro del repo, en `gateway/`**:
+un clon limpio se instala y arranca sin rutas de nadie.
+
+`install.sh` y `bin/jpcode.mjs` resuelven la carpeta en este orden:
+
+1. `$OPENCODE_CHAT_DIR`, si lo defines — para trabajar contra **tu** copia de opencode-chat.
+2. `~/studio/opencode-chat`, si existe: **tu copia de trabajo manda**. Es la que usa el proxy
+   que ya esté corriendo y, junto a ella, vive el `.api-key` que el envoltorio exporta.
+3. `gateway/` del repo — el caso de un clon limpio, donde (2) no existe.
+
+`gateway/` es una **copia publicada**, no la fuente: desarrollas en tu copia de trabajo y publicas
+con `bash sync-gateway.sh`, que la refresca sin arrastrar secretos (`.api-key`, `.zen-key`), la
+caché del catálogo (`.cache/`, 9 MB) ni el binario de `cloudflared` (`.bin/`, 39 MB).
+
+La clave del proxy (`.api-key`) **se autogenera** la primera vez que arranca el gateway, con
+permisos `600`: no hay nada que configurar ni que compartir.
 
 El branding **no parchea binarios** salvo los textos: Qwen expone tema, banner y subtítulo por
 ajustes (`ui.customThemes`, `ui.customAsciiArt`, `ui.customBannerTitle/Subtitle`).
@@ -112,12 +140,14 @@ También sigue el atajo de siempre: **arrastra el fichero al terminal** (o pega 
 `@imagen.png`): Qwen lo reconoce por extensión y lo adjunta como imagen.
 
 ```bash
-node jpcode/sync-jpcode.mjs --print      # ver qué se escribiría en settings.json
-node jpcode/patch-jpcode-brand.mjs       # re-aplicar la marca tras `qwen update`
-node jpcode/patch-jpcode-clipboard.mjs   # aviso de pegado de imagen veraz
-node jpcode/patch-jpcode-image-watch.mjs # que jpcode adjunte lo que llega del puente
-QWEN_HOME=~/.jpcode node jpcode/sync-jpcode.mjs
-bash jpcode/install.sh                   # todo: marca + parches de comportamiento + binario
+bash install.sh                           # todo: gateway + config + marca + parches + binario
+bash sync-gateway.sh                      # refrescar gateway/ desde tu copia de trabajo
+node sync-jpcode.mjs --print              # ver qué se escribiría en settings.json
+node patch-jpcode-brand.mjs               # re-aplicar la marca tras `qwen update`
+node patch-jpcode-clipboard.mjs           # aviso de pegado de imagen veraz
+node patch-jpcode-image-watch.mjs         # que jpcode adjunte lo que llega del puente
+node gateway/test.mjs                     # pruebas del gateway (209 aserciones)
+QWEN_HOME=~/.jpcode node sync-jpcode.mjs
 ```
 
 ## Base legal
@@ -131,7 +161,7 @@ cajas, barra de estado), no su código ni su marca.
 | Variable | Por defecto | Para qué |
 | --- | --- | --- |
 | `JPCODE_HOME` | `~/.jpcode` | Directorio de configuración. |
-| `OPENCODE_CHAT_DIR` | `~/studio/opencode-chat` | Gateway (proxy + claves). |
+| `OPENCODE_CHAT_DIR` | `gateway/` del repo | Gateway (proxy + claves). Úsalo para tu propia copia. |
 | `OPENCODE_PROXY_PORT` | `8096` | Puerto del proxy. |
 | `OPENCODE_SYNC_MODELS` | `1` | `0` desactiva el refresco de `/model` al arrancar. |
 | `JPCODE_IMG_BRIDGE` | `1` | `0` no levanta el puente de imágenes al arrancar. |
