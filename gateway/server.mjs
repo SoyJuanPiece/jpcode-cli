@@ -50,7 +50,13 @@ const PORT = Number(process.argv[2] || process.env.PORT || 8090);
  * expuesto a la LAN. `listen(PORT)` sin host escucharía en TODAS las interfaces.
  * Para exponerlo de verdad, ponlo detrás de un proxy con TLS, no aquí a pelo. */
 const HOST = process.env.HOST || "127.0.0.1";
-const ROOT = process.cwd();
+/* Dónde vive el estado del gateway: `.api-key`, `providers.json`, `auth.json`,
+ * la caché y la UI estática que sirve. Por defecto, la carpeta desde la que se
+ * arranca. `OPENCODE_CHAT_DIR` lo fija a mano, y jpcode lo usa para arrancar el
+ * proceso con el cwd FUERA del paquete: en Windows una carpeta que es el cwd de
+ * un proceso vivo no se puede renombrar, y npm renombra la suya en cada
+ * instalación/actualización (el `EBUSY` al hacer `npm i -g`). */
+const ROOT = process.env.OPENCODE_CHAT_DIR || process.cwd();
 const UPSTREAM = process.env.OPENCODE_BASE || "https://opencode.ai/zen/v1";
 const KEY = process.env.OPENCODE_API_KEY || process.env.ZEN_API_KEY || "";
 const MAX_BODY = 2 * 1024 * 1024; // 2 MB, de sobra para un chat

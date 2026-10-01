@@ -170,11 +170,21 @@ if (puerto === null) {
     mkdirSync(join(JP_HOME, "tmp"), { recursive: true });
     const registro = openSync(join(JP_HOME, "tmp", "gateway.log"), "a");
     const zen = clave(join(GATEWAY, ".zen-key"));
+    /* El proceso arranca con el cwd en ~/.jpcode y NO dentro del paquete, y
+       OPENCODE_CHAT_DIR le dice dónde está su casa (las keys, la caché, la UI).
+       Es a propósito: este gateway es `detached` y sobrevive a jpcode, y en
+       Windows una carpeta que es el cwd de un proceso vivo no se puede
+       renombrar → `npm i -g` fallaba con EBUSY al actualizar el paquete. */
     spawn(process.execPath, [server, String(puerto)], {
       detached: true,
-      cwd: GATEWAY,
+      cwd: JP_HOME,
       stdio: ["ignore", registro, registro],
-      env: { ...process.env, HOST: "127.0.0.1", ...(zen ? { OPENCODE_API_KEY: zen } : {}) },
+      env: {
+        ...process.env,
+        HOST: "127.0.0.1",
+        OPENCODE_CHAT_DIR: GATEWAY,
+        ...(zen ? { OPENCODE_API_KEY: zen } : {}),
+      },
     }).unref();
 
     for (let i = 0; i < 60; i++) {

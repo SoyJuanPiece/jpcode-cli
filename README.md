@@ -45,6 +45,32 @@ paquete que ya existe.
 **Clónalo siempre en una carpeta permanente.** `install.sh` enlaza el binario a la carpeta desde la
 que se ejecuta: si lo lanzas en `/tmp`, tu `jpcode` apunta a `/tmp` y se rompe cuando se vacíe.
 
+### Si en Windows te da `EBUSY` al instalar o actualizar
+
+```
+npm error code EBUSY
+npm error syscall rename
+npm error path C:\Users\...\AppData\Roaming\npm\node_modules\@juanpiecedev\jpcode\gateway
+```
+
+No es un fallo de Windows ni del paquete: **Windows no deja renombrar una carpeta que está en
+uso**, y npm renombra la suya en cada instalación. Lo normal es que tengas jpcode (o su gateway)
+todavía vivo en segundo plano, o el Explorer/el antivirus mirando ahí dentro. En un PowerShell
+nuevo:
+
+```powershell
+Stop-Process -Name node,jpcode -Force -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$env:APPDATA\npm\node_modules\@juanpiecedev" -ErrorAction SilentlyContinue
+npm i -g @juanpiecedev/jpcode
+```
+
+`npm uninstall -g` **no** mata el proceso, así que no sirve de atajo: da el mismo error. Y
+`npm update -g` tampoco, porque por dentro hace exactamente el mismo rename.
+
+Desde la **0.1.5** el gateway ya no se arranca con el directorio de trabajo dentro del paquete
+(`cwd: ~/.jpcode` + `OPENCODE_CHAT_DIR`), así que esto no vuelve a pasar. Si venías de una versión
+anterior, hay que matar el proceso viejo **una sola vez**.
+
 ## Qué incluye
 
 - **Paquete propio** (`package.json`, bin `jpcode`, licencia Apache-2.0).
