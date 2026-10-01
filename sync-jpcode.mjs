@@ -4,7 +4,7 @@
  *
  * Qwen trae branding por ajustes de fábrica, así que NO se parchea nada:
  *   ui.theme               → "jpcode"
- *   ui.customThemes.jpcode → la paleta de theme.json (negro + azul oscuro)
+ *   ui.customThemes.jpcode → la paleta de theme.json (negro + naranja Claude)
  *   ui.customAsciiArt      → banner propio (JPCODE grande / JPC compacto)
  *   ui.customBannerTitle   → "jpcode"
  *   ui.customBannerSubtitle→ atribución honesta

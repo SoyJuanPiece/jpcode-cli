@@ -50,8 +50,26 @@ que se ejecuta: si lo lanzas en `/tmp`, tu `jpcode` apunta a `/tmp` y se rompe c
 - **Paquete propio** (`package.json`, bin `jpcode`, licencia Apache-2.0).
 - **Config propia en `~/.jpcode`** (vía `QWEN_HOME`), heredando `~/.qwen` la primera vez.
 - **Marca visual**:
-  - Tema `jpcode` — fondo **negro** (`#000000`) con acento **azul oscuro** (`#1d4ed8` / `#1e3a8a`).
-    Todo el color vive en `theme.json`: cámbialo ahí y vuelve a lanzar `sync-jpcode.mjs`.
+  - Tema `jpcode` — fondo **negro** (`#000000`) con la paleta oscura de Claude Code: acento
+    **naranja Claude** (`#d77757`), grises `#888888` / `#505050`, degradado de banner
+    `#d77757 → #eb9f7f`. Todo el color vive en `theme.json`: cámbialo ahí y vuelve a lanzar
+    `sync-jpcode.mjs`.
+
+    El motor nombra sus colores de otra forma, así que las claves de `theme.json` se traducen
+    (`createCustomTheme` en `engine/chunks/chunk-UOLLXC6M.js`):
+
+    | clave en `theme.json` | dónde se ve |
+    | --- | --- |
+    | `AccentPurple` | texto de acento — **aquí va el naranja** |
+    | `AccentCyan` | símbolos (spinner, iconos) |
+    | `Gray` | texto secundario y **borde del prompt** |
+    | `AccentBlue` | enlaces y borde enfocado |
+    | `LightBlue` | código en línea |
+    | `GradientColors` | degradado del banner |
+    | `DiffAdded` / `DiffRemoved` | fondo de líneas en los diffs |
+
+    `DiffModified` está en la documentación del motor pero **no lo lee**: se deja por si una
+    versión futura lo usa.
   - Banner ASCII `JPCODE` (grande) / `JPC` (compacto), título y subtítulo propios.
   - **Título de ventana** del terminal: `jpcode - <carpeta>`.
 - **Todo lo del gateway**, con la misma experiencia que OpenCode:
