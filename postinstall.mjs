@@ -85,11 +85,14 @@ if (existsSync(ORIGEN_COMANDOS) && !existsSync(join(JP_HOME, "commands"))) {
 }
 
 /* 3) Parches sobre Qwen Code. */
+/* jpcode no declara el motor como dependencia: se instala aparte, así que aquí
+   se detecta. Si falta, se avisa con el comando exacto y no se rompe nada. */
 const QWEN = paqueteQwen();
 if (!QWEN) {
-  aviso("no encuentro Qwen Code (la base que jpcode re-marca), así que no parcheo nada.");
-  aviso(`instálalo con:  npm i -g @qwen-code/qwen-code`);
+  aviso("no encuentro el motor, así que no he parcheado nada.");
+  aviso("instálalo con:  npm i -g @qwen-code/qwen-code");
   aviso(`y repite:  node ${join(AQUI, "postinstall.mjs")}`);
+  aviso("jpcode no se lo trae solo, a propósito: es un paquete independiente.");
 } else {
   const parches = [
     "patch-jpcode-brand.mjs",

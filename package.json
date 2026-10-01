@@ -1,7 +1,7 @@
 {
   "name": "jpcode",
   "version": "0.1.0",
-  "description": "jpcode — CLI de código con la pinta de Claude Code, sobre Qwen Code (Apache-2.0) y un gateway local: modelos gratis de Zen y el catálogo de models.dev.",
+  "description": "jpcode — el CLI de código de JuanPiece: pinta de Claude Code, modelos gratis y tu propia API key, con gateway local.",
   "type": "module",
   "bin": {
     "jpcode": "bin/jpcode.mjs"
@@ -22,9 +22,6 @@
   "scripts": {
     "postinstall": "node postinstall.mjs"
   },
-  "dependencies": {
-    "@qwen-code/qwen-code": "~0.24.7"
-  },
   "os": [
     "linux",
     "darwin"
@@ -33,6 +30,7 @@
     "node": ">=22"
   },
   "license": "Apache-2.0",
+  "author": "JuanPiece",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SoyJuanPiece/jpcode-cli.git"
@@ -44,8 +42,9 @@
   "keywords": [
     "cli",
     "agent",
-    "qwen",
-    "zen",
-    "claude-code-style"
+    "jpcode",
+    "juanpiece",
+    "claude-code-style",
+    "zen"
   ]
 }
