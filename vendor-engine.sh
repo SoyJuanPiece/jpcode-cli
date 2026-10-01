@@ -104,7 +104,7 @@ repositorio, y se pueden reproducir con \`bash vendor-engine.sh\`:
 
 | Parche | Qué cambia |
 | --- | --- |
-| \`patch-jpcode-brand\` | Textos visibles (título de ventana y cadenas de marca), y color y frames del spinner del indicador de trabajo (fuera el braille, que en Windows Terminal sale en cuadro). |
+| \`patch-jpcode-brand\` | Textos visibles (título de ventana y cadenas de marca), y color y frames del spinner del indicador de trabajo (fuera el braille, que sale en cuadro; y frames ASCII en la consola clásica de Windows, que tampoco sabe dibujar las formas geométricas). |
 | \`patch-jpcode-clipboard\` | Sustituye el aviso de pegado de imágenes por uno veraz. |
 | \`patch-jpcode-image-watch\` | Añade el vigilante que adjunta la imagen que llega del puente. |
 | \`patch-qwen-search\` | Buscador en /model. |

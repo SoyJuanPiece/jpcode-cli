@@ -63,7 +63,13 @@ const TEXTOS = [
  * Windows Terminal: la línea de trabajo sale con un cuadro con un interrogante
  * en lugar del spinner. Los que se ponen aquí son del bloque Geometric Shapes
  * (U+25D0…U+25D3), el mismo del que salen el ◆/●/○ que la UI ya dibuja bien en
- * esas fuentes (la cabecera y el estado de las herramientas los usan). */
+ * esas fuentes (la cabecera y el estado de las herramientas los usan).
+ *
+ * Aun así queda la consola de Windows clásica (conhost, la que abre
+ * `powershell.exe`): su fuente por defecto tampoco tiene *Geometric Shapes*, así
+ * que ahí hasta el ◐ sale en cuadro. Cuando no haya Windows Terminal
+ * (`WT_SESSION`) ni el terminal de VS Code (`TERM_PROGRAM`) se degrada a frames
+ * ASCII puros — `| / -` — que dibuja cualquier fuente del mundo. */
 const SPINNER = "chunk-PE7HFQGZ.js";
 const SPINNER_NUEVO =
   "color:theme.text.accent,children:(0,import_jsx_runtime.jsx)(build_default,{type:spinnerType})";
@@ -76,6 +82,17 @@ const BRAILLE_DOTS = [
 ];
 const FRAMES_VISIBLES = ["25D0", "25D3", "25D1", "25D2"]; // ◐ ◓ ◑ ◒
 
+// Consola de Windows clásica = Windows, pero sin Windows Terminal, sin el
+// terminal de VS Code y sin mintty (Git Bash). Ahí la fuente no tiene ni braille
+// ni formas geométricas y cualquier glifo raro sale en cuadro.
+const WIN_LEGACY =
+  '(process.platform==="win32"&&!process.env.WT_SESSION&&!process.env.TERM_PROGRAM&&!process.env.MSYSTEM)';
+const ASCII_FRAMES = '["|","/","-"]';
+const ASCII_TOGGLE = '["*","+"]';
+
+/** Frames del motor: los bonitos, y los ASCII solo en la consola de Windows. */
+const FRAMES_TRABAJO = `(${WIN_LEGACY}?${ASCII_FRAMES}:${frames(FRAMES_VISIBLES)})`;
+
 const SPINNER_CAMBIOS = [
   [
     "color:theme.text.primary,children:(0,import_jsx_runtime.jsx)(build_default,{type:spinnerType})",
@@ -83,14 +100,17 @@ const SPINNER_CAMBIOS = [
   ],
   // Los mismos 10 frames braille están dos veces: los del paquete cli-spinners
   // (spinner "dots", el de la línea de trabajo) y los del propio motor.
-  [frames(BRAILLE_DOTS), frames(FRAMES_VISIBLES)],
+  [frames(BRAILLE_DOTS), FRAMES_TRABAJO],
   // Frame fijo de "esperando tu respuesta": el braille también se veía en cuadro.
-  ['WAITING_SPINNER_FRAME="\\u280F"', 'WAITING_SPINNER_FRAME="\\u25CB"'],
+  [
+    'WAITING_SPINNER_FRAME="\\u280F"',
+    `WAITING_SPINNER_FRAME=(${WIN_LEGACY}?"o":"\\u25CB")`,
+  ],
   // Spinner "toggle" (columna de estado cuando una herramienta se está
   // ejecutando): ⊶⊷ (U+22B6/U+22B7) tampoco está garantizado en esas fuentes.
   [
     `toggle:{interval:250,frames:${frames(["22B6", "22B7"])}}`,
-    `toggle:{interval:250,frames:${frames(["25CF", "25CB"])}}`,
+    `toggle:{interval:250,frames:(${WIN_LEGACY}?${ASCII_TOGGLE}:${frames(["25CF", "25CB"])})}`,
   ],
 ];
 

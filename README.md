@@ -128,6 +128,13 @@ Dos cosas distintas, y ninguna es «la interfaz»:
     defecto de Windows Terminal, y ahí en lugar del spinner se veía un cuadro con un
     interrogante. Los elegidos salen del bloque *Geometric Shapes*, el mismo del ◆/●/○ que la
     interfaz ya dibuja bien en esas fuentes.
+
+    Queda un caso aparte: la **consola clásica de Windows** (conhost, la que abre
+    `powershell.exe`), que no tiene ni braile ni formas geométricas y donde hasta el ◐ sale en
+    cuadro. Cuando jpcode detecta Windows **sin** Windows Terminal (`WT_SESSION`) ni el terminal
+    de VS Code (`TERM_PROGRAM`), degrada solo ahí a frames **ASCII puros** — `| / -` — que
+    dibuja cualquier fuente. En Windows Terminal y en el terminal de VS Code se conservan los
+    geométricos.
   - **Auto-update del motor apagado** (`general.enableAutoUpdate: false`). El motor traía el suyo
     encendido y creía ser `@qwen-code/qwen-code@0.24.7`: leía `engine/package.json` y, al ver una
     versión nueva en npm, podía lanzar en segundo plano un `npm i -g` de **otro** paquete. jpcode
