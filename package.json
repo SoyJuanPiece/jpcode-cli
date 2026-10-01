@@ -1,0 +1,21 @@
+{
+  "name": "jpcode",
+  "version": "0.1.0",
+  "description": "jpcode — CLI de código con la pinta de Claude Code, sobre Qwen Code (Apache-2.0) y el gateway de opencode-chat.",
+  "type": "module",
+  "bin": {
+    "jpcode": "bin/jpcode.mjs"
+  },
+  "files": [
+    "bin",
+    "sync-jpcode.mjs",
+    "patch-jpcode-brand.mjs",
+    "theme.json",
+    "README.md"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["cli", "agent", "qwen", "zen", "claude-code-style"]
+}

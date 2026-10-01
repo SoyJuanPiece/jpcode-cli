@@ -1,0 +1,12 @@
+# Dependencias (jpcode no tiene, pero por si acaso)
+node_modules/
+package-lock.json
+bun.lockb
+
+# Artefactos de ejecución: imágenes que llegan del puente, logs, temporales
+tmp/
+*.log
+
+# Sistema
+.DS_Store
+Thumbs.db

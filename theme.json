@@ -1,0 +1,19 @@
+{
+  "name": "jpcode",
+  "type": "custom",
+  "Background": "#000000",
+  "Foreground": "#e3e8f0",
+  "LightBlue": "#7aa2d6",
+  "AccentBlue": "#1e3a8a",
+  "AccentPurple": "#1d4ed8",
+  "AccentCyan": "#38bdf8",
+  "AccentGreen": "#3f9c6b",
+  "AccentYellow": "#c9a227",
+  "AccentRed": "#c2554f",
+  "Comment": "#6b7280",
+  "Gray": "#94a3b8",
+  "DiffAdded": "#0b2b1c",
+  "DiffRemoved": "#2d1417",
+  "DiffModified": "#101a33",
+  "GradientColors": ["#1d4ed8", "#1e3a8a"]
+}
