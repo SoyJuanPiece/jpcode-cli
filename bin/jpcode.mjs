@@ -218,6 +218,13 @@ if (puerto === null) {
         ...process.env,
         HOST: "127.0.0.1",
         OPENCODE_CHAT_DIR: GATEWAY,
+        /* OPENCODE_GATEWAY_KEY: la misma clave que asegurarClaveGateway() ya
+           generó o leyó de GATEWAY/.api-key. Sin esto el gateway la ignora,
+           genera una nueva en memoria y el CLI recibe 401 (claves distintas).
+           También es lo que hace que esNuestro() detecte correctamente un
+           gateway ya corriendo: si la clave no coincide, lo descarta y abre
+           más puertos innecesariamente. */
+        ...(claveGateway ? { OPENCODE_GATEWAY_KEY: claveGateway } : {}),
         ...(zen ? { OPENCODE_API_KEY: zen } : {}),
       },
     }).unref();
