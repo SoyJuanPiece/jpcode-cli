@@ -717,7 +717,6 @@ console.log("\n== app.js: parar, tema y sonda ==");
   ok(findAll(store.get("models"), "tag-bad").length > 0, "los modelos caídos se marcan en rojo");
 }
 
-console.log(`\n${fallos === 0 ? "✅ todo bien" : `❌ ${fallos} comprobación(es) fallida(s)`}\n`);
 console.log("\n== catálogo compartido ==");
 {
   // app.js no puede importar models.mjs (es un script de navegador), así que
@@ -1119,5 +1118,7 @@ console.log("\n== lista de modelos de Qwen (sync-qwen-models) ==");
   gw.close();
   rmSync(qhome, { recursive: true, force: true });
 }
+
+console.log(`\n${fallos === 0 ? "✅ todo bien" : `❌ ${fallos} comprobación(es) fallida(s)`}\n`);
 
 process.exit(fallos ? 1 : 0);
