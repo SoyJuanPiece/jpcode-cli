@@ -91,13 +91,33 @@ Dos cosas distintas, y ninguna es «la interfaz»:
 
 ### Si la terminal parpadea cuando el modelo está pensando
 
-El motor pinta la interfaz con el renderizador **estándar** de ink, que no diffing: en cada cuadro
-borra todas las líneas del anterior y las reescribe enteras. Mientras el modelo piensa eso pasa
-**12 veces por segundo** (el spinner gira cada 80 ms y el contador de tokens cada 100 ms), y el
-cuadro incluye el banner de 6 líneas con degradado. En un terminal local no se nota; donde el pintado
-va por la red —el terminal web de VS Code, Cloud Workstations— se ve la pantalla quedándose en negro
-y volviéndose a pintar. **Ese es el precio de que la pantalla sea siempre correcta**, y es el que
-paga jpcode por defecto.
+**jpcode lo arregla por config: `ui.useTerminalBuffer` va a `false`** (lo pone `sync-jpcode.mjs` en
+cada arranque, y se respeta si ya lo has elegido a mano).
+
+El motor trae dos formas de pintar el historial, y la diferencia es justo el parpadeo:
+
+- **Con `useTerminalBuffer: true`** (lo que trae el motor de fábrica) la conversación se pinta
+  **dentro de la app**, en la pantalla alternativa, y entra en el cuadro que se repinta. El spinner
+  y el contador de tokens cambian unas **12 veces por segundo**, y el cuadro **crece con la
+  conversación**: al principio son 8 líneas, al final son 40. El coste del repintado crece conforme
+  bajas el chat, y en un terminal lento —la consola clásica de Windows, la que abre
+  `powershell.exe`, va bastante por detrás de Windows Terminal— eso se ve como la pantalla
+  quedándose en negro y volviéndose a pintar.
+- **Con `useTerminalBuffer: false`** el motor envuelve el historial en `<Static>`: se escribe
+  **una vez** en el scrollback del terminal y no se vuelve a pintar nunca. Cada cuadro repinta solo
+  la zona viva —pie, spinner, indicador de trabajo—, así que el coste **deja de crecer al bajar**.
+  Y no hace falta pantalla alternativa ni secuencias de scroll: es el modo que entiende cualquier
+  terminal.
+
+Lo que se pierde: el scrollback interno y la selección con ratón pasan a ser los del terminal. Es un
+intercambio consciente — se cambia cómo se navega el historial por cómo se ve la sesión—, y va en la
+dirección de que **la misma jpcode se comporte igual en cualquier terminal**, en vez de degradarse
+según cuál.
+
+Aun así el renderizador en sí sigue siendo el **estándar** de ink, que no diffing: en cada cuadro
+borra todas las líneas del anterior y las reescribe enteras. Ahora bien, con el historial fuera del
+cuadro ese repintado es de unas pocas líneas y no se nota; donde el pintado va por red —el terminal
+web de VS Code, Cloud Workstations— es donde todavía puede notarse.
 
 Hay un segundo renderizador en el motor que **sí** compara línea a línea y solo reescribe lo que
 cambia, así que escribiría 7-10 veces menos. Se puede encender con `JPCODE_INCREMENTAL_RENDER=1`,
@@ -198,6 +218,17 @@ salen byte a byte como antes.
     de VS Code (`TERM_PROGRAM`), degrada solo ahí a frames **ASCII puros** — `| / -` — que
     dibuja cualquier fuente. En Windows Terminal y en el terminal de VS Code se conservan los
     geométricos.
+  - **Historial al scrollback del terminal** (`ui.useTerminalBuffer: false`). El motor lo pinta por
+    defecto dentro de la app, en la pantalla alternativa, y eso mete toda la conversación en el
+    cuadro que se repinta: como el spinner gira ~12 veces por segundo, el parpadeo **crece conforme
+    bajas el chat**, y duele más en la consola clásica de Windows que en Windows Terminal. Con la
+    clave a `false` el historial se escribe una vez (va en `<Static>`) y solo se repinta la zona
+    viva, así que el coste deja de crecer al bajar — y sin pantalla alternativa ni secuencias de
+    scroll, que es lo que lo hace portable a cualquier terminal. Pierdes el scrollback interno y
+    la selección de ratón, que pasan a ser los del terminal. A diferencia del resto de claves de
+    este bloque, **se respeta si ya la has elegido**: poner `true` a mano en
+    `~/.jpcode/settings.json` la deja como está. Ver
+    [Si la terminal parpadea](#si-la-terminal-parpadea-cuando-el-modelo-está-pensando).
   - **Auto-update del motor apagado** (`general.enableAutoUpdate: false`). El motor traía el suyo
     encendido y creía ser `@qwen-code/qwen-code@0.24.7`: leía `engine/package.json` y, al ver una
     versión nueva en npm, podía lanzar en segundo plano un `npm i -g` de **otro** paquete. jpcode
@@ -211,6 +242,14 @@ salen byte a byte como antes.
     arreglo de la 0.1.5 (el gateway ya no corre con el `cwd` dentro del paquete) no da `EBUSY`
     aunque tengas jpcode abierto. Aun así, lo limpio en Windows es cerrar jpcode antes.
   - **Título de ventana** del terminal: `jpcode - <carpeta>`.
+  - **La versión que se anuncia es la de jpcode**: la cabecera, `/about`, `/bug`, el item
+    `qwen-version` de la línea de estado y `jpcode --version` dicen `0.2.0`, no la del motor.
+    Antes el motor la traía escrita en su código (`0.24.7`, la suya) y no había forma de
+    cambiarla por config —`customBannerTitle` siempre le pega el sufijo de versión—, así que
+    era un parche: `bin/jpcode.mjs` exporta `JPCODE_CLI_VERSION` al motor y su
+    `getCliVersion()` la usa si está. Sin la variable sigue la del motor. La del motor se
+    conserva en `engine/package.json` (y sale en el parche del aviso de licencia), por si hay
+    que reportar un bug contra él.
 - **Todo lo del gateway**, con la misma experiencia que OpenCode:
   - **`/connect`** (y **`/provider`**) abren *«Connect a Provider»* directamente en el catálogo
     completo —211 proveedores de models.dev— con **buscador**; `Esc` vuelve al menú de Qwen.
@@ -230,7 +269,7 @@ salen byte a byte como antes.
 | Pieza | Qué hace |
 | --- | --- |
 | `bin/jpcode.mjs` | Prepara config/identidad y arranca por el envoltorio del gateway. |
-| `sync-jpcode.mjs` | Fusiona tema y banner en `~/.jpcode/settings.json` (idempotente). |
+| `sync-jpcode.mjs` | Fusiona tema, banner y `ui.useTerminalBuffer: false` en `~/.jpcode/settings.json` (idempotente). |
 | `patch-jpcode-brand.mjs` | Rebrandea el motor: título de ventana, cadenas visibles y color del spinner. |
 | `patch-jpcode-clipboard.mjs` | Cambia el aviso de pegado de imagen por uno veraz y accionable. |
 | `img-bridge.mjs` | Puente: servidor + página para pegar la imagen desde el navegador. |
@@ -366,6 +405,5 @@ cajas, barra de estado), no su código ni su marca.
 
 ## Siguientes pasos
 
-- El número de versión de la cabecera (`v0.24.7`) es el del motor: ponerle el de jpcode.
 - Logo ASCII definitivo con tu diseño.
 - Completar el rebranding de la UI (menús, `/help`, `/status`).
