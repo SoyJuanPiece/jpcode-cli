@@ -91,28 +91,37 @@ Dos cosas distintas, y ninguna es «la interfaz»:
 
 ### Si la terminal parpadea cuando el modelo está pensando
 
-No debería pasar: `patch-jpcode-render.mjs` lo quita. Si aun así lo ves, arranca jpcode con
-`JPCODE_INCREMENTAL_RENDER=0` para confirmar que es eso (y si lo es, dilo: el escape existe justo
-para poder volver atrás).
-
 El motor pinta la interfaz con el renderizador **estándar** de ink, que no diffing: en cada cuadro
 borra todas las líneas del anterior y las reescribe enteras. Mientras el modelo piensa eso pasa
 **12 veces por segundo** (el spinner gira cada 80 ms y el contador de tokens cada 100 ms), y el
 cuadro incluye el banner de 6 líneas con degradado. En un terminal local no se nota; donde el pintado
 va por la red —el terminal web de VS Code, Cloud Workstations— se ve la pantalla quedándose en negro
-y volviéndose a pintar.
+y volviéndose a pintar. **Ese es el precio de que la pantalla sea siempre correcta**, y es el que
+paga jpcode por defecto.
 
-El motor trae ya escrito un segundo renderizador que **sí** compara línea a línea, pero viene
-**apagado** (`incrementalRendering: false` en `render()`). `patch-jpcode-render.mjs` lo enciende.
-Medido en la misma sesión de 30 s, con el mismo modelo:
+Hay un segundo renderizador en el motor que **sí** compara línea a línea y solo reescribe lo que
+cambia, así que escribiría 7-10 veces menos. Se puede encender con `JPCODE_INCREMENTAL_RENDER=1`,
+pero es **experimental y no se recomienda**: cuando el chat crece más que la ventana, escribir el
+cuadro desplaza la pantalla y las filas físicas dejan de coincidir con lo que el motor cree que
+tiene pintado. Como solo reescribe las líneas que cambian, **el error no se cura solo**: sale una
+fila duplicada de la de arriba, una línea de estado vieja que nunca se borra (`◐ Thinking…` y
+`◓ Pondering…` a la vez) o líneas cortadas a medias.
 
-| | cuadros | `ESC[2K` (borrar línea) | bytes escritos |
-| --- | --- | --- | --- |
-| antes | 323 | 5 670 | 1 793 784 |
-| después | 309 | **7** | **73 294** |
+Comprobado con un emulador de terminal que reconstruye la pantalla cuadro a cuadro (100×30, cuatro
+mensajes largos seguidos para que el chat crezca), contando filas enfermas de verdad:
 
-Un giro del spinner pasa de reescribir once líneas a reescribir **una**. Con
-`JPCODE_INCREMENTAL_RENDER=0` se deja como estaba, por si algún terminal concreto saliera peor.
+| variante | cuadros | cuadros con filas enfermas | racha más larga | último cuadro |
+| --- | --- | --- | --- | --- |
+| **estándar (por defecto)** | 1 798 | **0** | **0** | limpio |
+| incremental, sin guarda | 1 659 | **706** (43 %) | 294 | **roto** |
+| incremental, con la guarda del parche | 1 545 / 1 788 | 0 / 118 | 0 / 40 | limpio |
+
+`patch-jpcode-render.mjs` deja el incremental **apagado salvo que lo pidas** (`==="1"`, no
+`!=="0"`) y le añade una guarda para que el modo experimental se rompa lo menos posible: si el
+cuadro no cabe en la pantalla, o si el contenido se ha desplazado respecto al cuadro anterior, ese
+cuadro no se diffea sino que se borra y se reescribe entero. Con la guarda el desastre es unas seis
+veces menor y sale limpio en algunas sesiones, pero **no en todas**: por eso sigue apagado por
+defecto.
 
 ### Si el modo auto dice que no está disponible
 
@@ -226,7 +235,7 @@ salen byte a byte como antes.
 | `patch-jpcode-clipboard.mjs` | Cambia el aviso de pegado de imagen por uno veraz y accionable. |
 | `img-bridge.mjs` | Puente: servidor + página para pegar la imagen desde el navegador. |
 | `patch-jpcode-image-watch.mjs` | Adjunta sola en el prompt la imagen que llega del puente. |
-| `patch-jpcode-render.mjs` | Enciende el renderizador incremental de ink: sin él la pantalla parpadea al pensar. |
+| `patch-jpcode-render.mjs` | Render de ink: deja el incremental **apagado por defecto** (rompe el desplazamiento del chat) y le pone una guarda por si lo activas con `JPCODE_INCREMENTAL_RENDER=1`. |
 | `theme.json` | Paleta del tema `jpcode`. |
 | `install.sh` | Instalación desde el código: trae el motor, piezas nativas, config, tema y binario. |
 | `gateway/` | El gateway (proxy + catálogo + envoltorio `qwen`), sin dependencias. |

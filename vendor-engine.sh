@@ -107,7 +107,7 @@ repositorio, y se pueden reproducir con \`bash vendor-engine.sh\`:
 | \`patch-jpcode-brand\` | Textos visibles (título de ventana y cadenas de marca), y color y frames del spinner del indicador de trabajo (fuera el braille, que sale en cuadro; y frames ASCII en la consola clásica de Windows, que tampoco sabe dibujar las formas geométricas). |
 | \`patch-jpcode-clipboard\` | Sustituye el aviso de pegado de imágenes por uno veraz. |
 | \`patch-jpcode-image-watch\` | Añade el vigilante que adjunta la imagen que llega del puente. |
-| \`patch-jpcode-render\` | Enciende el renderizador incremental de ink, que solo reescribe las líneas que cambian. Sin él, cada giro del indicador de trabajo borraba y repintaba la pantalla entera 12 veces por segundo, que es el parpadeo en los terminales web. |
+| \`patch-jpcode-render\` | Render de ink: deja el renderizador incremental **apagado por defecto** y le añade una guarda de desplazamiento. El incremental escribe 7-10 veces menos (el parpadeo en los terminales web viene de repintar la pantalla 12 veces por segundo), pero cuando el chat crece más que la ventana se rompe la pantalla, así que solo se activa a mano con \`JPCODE_INCREMENTAL_RENDER=1\`. |
 | \`patch-qwen-search\` | Buscador en /model. |
 | \`patch-qwen-providers\` | Catálogo completo de models.dev en el diálogo de conexión. |
 | \`patch-qwen-auth\` | Buscador en el diálogo de conexión. |
