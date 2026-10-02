@@ -251,6 +251,7 @@ const hijo = spawn(process.execPath, [entrada, ...process.argv.slice(2)], {
   env: {
     ...process.env,
     QWEN_HOME: JP_HOME,
+    JPCODE_INCREMENTAL_RENDER: process.env.JPCODE_INCREMENTAL_RENDER ?? "1",
     ...(claveGateway ? { OPENCODE_GATEWAY_KEY: claveGateway } : {}),
     ...(version ? { JPCODE_CLI_VERSION: version, CLI_VERSION: version } : {}),
   },
