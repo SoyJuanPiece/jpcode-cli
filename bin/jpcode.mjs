@@ -30,7 +30,8 @@
  *   OPENCODE_GATEWAY_DIR gateway alternativo (por defecto el del paquete)
  */
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, cpSync, openSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, cpSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
@@ -56,6 +57,29 @@ function clave(ruta) {
     return undefined;
   }
 }
+
+/**
+ * Garantiza que la clave del gateway exista antes de probar puertos.
+ * Si no existía, la siembra en GATEWAY/.api-key para que el gateway y el motor
+ * usen exactamente la misma clave desde la primera llamada.
+ */
+function asegurarClaveGateway() {
+  if (process.env.OPENCODE_GATEWAY_KEY) return process.env.OPENCODE_GATEWAY_KEY;
+  if (process.env.CHAT_API_KEY) return process.env.CHAT_API_KEY;
+  const f = join(GATEWAY, ".api-key");
+  const v = clave(f);
+  if (v) return v;
+  try {
+    mkdirSync(GATEWAY, { recursive: true });
+    const nueva = "ock_" + randomBytes(24).toString("hex");
+    writeFileSync(f, nueva + "\n", { mode: 0o600 });
+    return nueva;
+  } catch {
+    return "";
+  }
+}
+
+const claveGateway = asegurarClaveGateway();
 
 /** La versión de jpcode, del package.json que está al lado. Si no se puede leer,
  *  undefined: mejor que el motor anuncie la suya (que es lo que pasaba antes) a
@@ -156,11 +180,10 @@ async function esNuestro(puerto, k) {
 
 /** Primer puerto donde podamos mandar: libre, o ya ocupado por el nuestro. */
 async function elegirPuerto() {
-  const k = clave(join(GATEWAY, ".api-key"));
   // 8097 lo usa el puente de imágenes, así que no se prueba.
   for (const p of [PUERTO, PUERTO + 2, PUERTO + 3, PUERTO + 4, PUERTO + 5]) {
     if (!(await responde(p))) return p;
-    if (await esNuestro(p, k)) return p;
+    if (await esNuestro(p, claveGateway)) return p;
     aviso(`el puerto ${p} lo ocupa otro gateway; pruebo el siguiente`);
   }
   return null;
@@ -212,9 +235,6 @@ if (puerto === null) {
 }
 
 const URL_GATEWAY = `http://127.0.0.1:${puerto ?? PUERTO}/v1`;
-
-/* 6) La clave del gateway se lee después de que el servidor la haya generado (si era la primera vez). */
-const claveGateway = clave(join(GATEWAY, ".api-key")) || process.env.OPENCODE_GATEWAY_KEY;
 
 /* 7) La lista de /model se rellena con lo que el gateway tenga usable AHORA
    (gratis de Zen + proveedores conectados). Los modelos se apuntan a NUESTRO
