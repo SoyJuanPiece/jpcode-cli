@@ -213,7 +213,10 @@ if (puerto === null) {
 
 const URL_GATEWAY = `http://127.0.0.1:${puerto ?? PUERTO}/v1`;
 
-/* 6) La lista de /model se rellena con lo que el gateway tenga usable AHORA
+/* 6) La clave del gateway se lee después de que el servidor la haya generado (si era la primera vez). */
+const claveGateway = clave(join(GATEWAY, ".api-key")) || process.env.OPENCODE_GATEWAY_KEY;
+
+/* 7) La lista de /model se rellena con lo que el gateway tenga usable AHORA
    (gratis de Zen + proveedores conectados). Los modelos se apuntan a NUESTRO
    puerto, no al de siempre: si el 8096 estaba ocupado, los ajustes tienen que
    reflejarlo o el motor pediría al gateway equivocado.
@@ -221,13 +224,14 @@ const URL_GATEWAY = `http://127.0.0.1:${puerto ?? PUERTO}/v1`;
 if (gatewayListo && process.env.OPENCODE_SYNC_MODELS !== "0" && existsSync(join(GATEWAY, "sync-qwen-models.mjs"))) {
   spawnSync(process.execPath, [join(GATEWAY, "sync-qwen-models.mjs")], {
     stdio: "ignore",
-    env: { ...process.env, QWEN_SETTINGS: join(JP_HOME, "settings.json"), OPENCODE_GATEWAY_URL: URL_GATEWAY },
+    env: {
+      ...process.env,
+      QWEN_SETTINGS: join(JP_HOME, "settings.json"),
+      OPENCODE_GATEWAY_URL: URL_GATEWAY,
+      ...(claveGateway ? { OPENCODE_GATEWAY_KEY: claveGateway } : {}),
+    },
   });
 }
-
-/* 7) La clave del gateway va por entorno: el motor no guarda credenciales, lee
-   process.env[envKey] y en los ajustes cada modelo declara OPENCODE_GATEWAY_KEY. */
-const claveGateway = clave(join(GATEWAY, ".api-key")) || process.env.OPENCODE_GATEWAY_KEY;
 
 /* 8) El motor, que viaja dentro. */
 const entrada = join(ENGINE, "cli-entry.js");

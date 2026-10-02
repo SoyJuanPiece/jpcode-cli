@@ -134,7 +134,7 @@ delete otros[CLAVE]; // refrescamos solo el nuestro
 // /auth apunta a otros sitios y se conserva intacto.
 const esNuestro = (lista) =>
   Array.isArray(lista) && lista.length > 0 &&
-  lista.every((m) => m && m.baseUrl === BASE && m.envKey === ENVKEY);
+  lista.every((m) => m && (m.envKey === ENVKEY || /^http:\/\/(127\.0\.0\.1|localhost):\d+\/v1\/?$/.test(m.baseUrl || "")));
 for (const k of Object.keys(otros)) if (esNuestro(otros[k])) delete otros[k];
 
 // Los comandos propios (node) no deben pedir permiso cada vez. `permissions.allow`
