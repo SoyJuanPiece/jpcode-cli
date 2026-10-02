@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readFile, stat, writeFile } from "node:fs/promises";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { extname, join, normalize } from "node:path";
 import { MODELS, MODEL_IDS, resolveModel } from "./models.mjs";
@@ -79,8 +79,9 @@ const OFFICIAL_TOOLS = [
 
 const KEY_FILE = join(ROOT, ".api-key");
 
-/** Prioridad: CHAT_API_KEY > .api-key > una nueva que se guarda con permisos 600. */
+/** Prioridad: OPENCODE_GATEWAY_KEY > CHAT_API_KEY > .api-key > una nueva que se guarda con permisos 600. */
 async function claveDelGateway() {
+  if (process.env.OPENCODE_GATEWAY_KEY) return process.env.OPENCODE_GATEWAY_KEY;
   if (process.env.CHAT_API_KEY) return process.env.CHAT_API_KEY;
   try {
     const guardada = (await readFile(KEY_FILE, "utf8")).trim();
@@ -97,12 +98,22 @@ async function claveDelGateway() {
   return nueva;
 }
 
-const GATEWAY_KEY = await claveDelGateway();
+let GATEWAY_KEY = await claveDelGateway();
 
 /** Comparación en tiempo constante (evita filtrar la clave por el tiempo). */
 function esLaClave(candidata) {
-  if (typeof candidata !== "string" || candidata.length !== GATEWAY_KEY.length) return false;
-  return timingSafeEqual(Buffer.from(candidata), Buffer.from(GATEWAY_KEY));
+  if (typeof candidata !== "string") return false;
+  if (candidata.length === GATEWAY_KEY.length && timingSafeEqual(Buffer.from(candidata), Buffer.from(GATEWAY_KEY))) {
+    return true;
+  }
+  try {
+    const enDisco = readFileSync(KEY_FILE, "utf8").trim();
+    if (enDisco && enDisco.length === candidata.length && timingSafeEqual(Buffer.from(candidata), Buffer.from(enDisco))) {
+      GATEWAY_KEY = enDisco;
+      return true;
+    }
+  } catch {}
+  return false;
 }
 
 /** Acepta `Authorization: Bearer …` y `x-api-key: …` (como los demás gateways). */
