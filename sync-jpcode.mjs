@@ -9,6 +9,7 @@
  *   ui.customBannerTitle   → "jpcode"
  *   ui.customBannerSubtitle→ vacío (jpcode no se presenta como derivado de nada)
  *   ui.customWittyPhrases  → frases del indicador de trabajo, sobrias
+ *   ui.useTerminalBuffer   → false: historial al scrollback, no repintado (ver abajo)
  *   general.enableAutoUpdate → false (jpcode NO se auto-actualiza; ver abajo)
  *   tools.toolSearch.threshold → herramientas declaradas de entrada, sin puente
  *
@@ -93,6 +94,26 @@ ui.customBannerTitle = TITULO;
 ui.customBannerSubtitle = SUBTITULO;
 ui.customWittyPhrases = FRASES_TRABAJO;
 
+/* El historial virtual. Con él, la conversación se pinta DENTRO de la app, en
+   la pantalla alternativa, y el renderizador estándar la reescribe entera en
+   cada cuadro. El spinner y el contador de tokens cambian unas 12 veces por
+   segundo, y el cuadro CRECE con la conversación: por eso el parpadeo empeora
+   conforme bajas el chat, y duele más en un terminal lento (la consola clásica
+   de Windows, la que abre `powershell.exe`, va bastante por detrás de Windows
+   Terminal).
+
+   Sin él, el motor envuelve el historial en `<Static>`: se escribe una vez en el
+   scrollback del terminal y no se vuelve a pintar nunca. Cada cuadro repinta
+   solo la zona viva — pie, spinner, indicador de trabajo — así que el coste deja
+   de crecer al bajar. Y no hace falta pantalla alternativa ni secuencias de
+   scroll: es el modo que entiende cualquier terminal.
+
+   A diferencia del resto de claves de este fichero, que son identidad y jpcode
+   las impone, esta se respeta si el usuario ya la ha elegido: poner
+   `useTerminalBuffer: true` a mano en `~/.jpcode/settings.json` la deja como
+   está, porque `settings.json` va antes que este script. */
+if (typeof ui.useTerminalBuffer !== "boolean") ui.useTerminalBuffer = false;
+
 /* El motor trae su propio auto-update encendido y cree que es
    `@qwen-code/qwen-code@0.24.7`: lo lee de engine/package.json y, si ve una
    versión más nueva en npm, lanza en segundo plano un `npm i -g` del paquete
@@ -127,4 +148,9 @@ console.log(`  tema:   ${tema.name} (${tema.Background} · acento ${tema.AccentP
 console.log(`  banner: "${TITULO}"${SUBTITULO ? ` — ${SUBTITULO}` : " (sin subtítulo)"}`);
 console.log(`  trabajo: ${FRASES_TRABAJO.join(" ")} · auto-update del motor: off`);
 console.log(`  tools:  toolSearch.threshold=${tools.toolSearch.threshold} (declaradas de entrada)`);
+console.log(`  scroll: useTerminalBuffer=${ui.useTerminalBuffer} (${
+  ui.useTerminalBuffer
+    ? "historial virtual: lo pide el parpadeo al bajar"
+    : "historial al scrollback del terminal"
+})`);
 process.exit(0);
