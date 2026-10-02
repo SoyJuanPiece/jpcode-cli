@@ -178,14 +178,79 @@ async function esNuestro(puerto, k) {
   }
 }
 
-/** Primer puerto donde podamos mandar: libre, o ya ocupado por el nuestro. */
+/**
+ * Mata el proceso que ocupa un puerto dado.
+ * Windows: netstat -ano + taskkill. Linux/Mac: fuser -k o lsof+kill.
+ * Devuelve true si el puerto quedó libre tras el intento.
+ */
+async function matarPuerto(p) {
+  try {
+    const esWindows = process.platform === "win32";
+    if (esWindows) {
+      /* netstat -ano muestra: Proto  Addr_local  Addr_remota  Estado  PID */
+      const r = spawnSync("netstat", ["-ano"], { encoding: "utf8", timeout: 5000 });
+      if (r.status !== 0) return false;
+      /* Buscamos línea con :PUERTO y estado LISTENING */
+      const linea = r.stdout.split("\n").find(
+        (l) => new RegExp(`[: ]${p}\\s`).test(l) && /LISTENING/i.test(l)
+      );
+      if (!linea) return false;
+      const pid = linea.trim().split(/\s+/).pop();
+      if (!pid || pid === "0") return false;
+      spawnSync("taskkill", ["/PID", pid, "/F"], { timeout: 5000 });
+    } else {
+      /* Linux / macOS: fuser mata directamente */
+      const fuser = spawnSync("fuser", ["-k", `${p}/tcp`], { timeout: 5000 });
+      if (fuser.status !== 0) {
+        /* fallback: lsof */
+        const lsof = spawnSync("lsof", ["-ti", `tcp:${p}`], { encoding: "utf8", timeout: 5000 });
+        const pid = (lsof.stdout || "").trim();
+        if (pid) spawnSync("kill", ["-9", pid], { timeout: 5000 });
+      }
+    }
+    /* Esperamos hasta 2 s a que el proceso muera y el SO libere el puerto */
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 250));
+      if (!(await responde(p))) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Elige el puerto para el gateway con esta política:
+ *  1. Puerto principal libre → úsalo.
+ *  2. Puerto principal ocupado por el nuestro (clave ok) → reutiliza.
+ *  3. Puerto principal ocupado por otro → intenta matarlo y quedarte con él.
+ *  4. No se pudo matar → busca el primer puerto de la lista que esté libre.
+ *  5. Todos ocupados y no matables → null (el usuario lo arranca a mano).
+ */
 async function elegirPuerto() {
   // 8097 lo usa el puente de imágenes, así que no se prueba.
-  for (const p of [PUERTO, PUERTO + 2, PUERTO + 3, PUERTO + 4, PUERTO + 5]) {
-    if (!(await responde(p))) return p;
-    if (await esNuestro(p, claveGateway)) return p;
-    aviso(`el puerto ${p} lo ocupa otro gateway; pruebo el siguiente`);
+  const candidatos = [PUERTO, PUERTO + 2, PUERTO + 3, PUERTO + 4, PUERTO + 5];
+
+  /* Paso 1 y 2: puerto principal libre o ya nuestro */
+  if (!(await responde(PUERTO))) return PUERTO;
+  if (await esNuestro(PUERTO, claveGateway)) return PUERTO;
+
+  /* Paso 3: hay algo ajeno en el puerto principal → intentamos matarlo */
+  aviso(`el puerto ${PUERTO} lo ocupa un gateway ajeno; intentando liberarlo…`);
+  const liberado = await matarPuerto(PUERTO);
+  if (liberado) {
+    aviso(`puerto ${PUERTO} liberado`);
+    return PUERTO;
   }
+
+  /* Paso 4: no pudimos matar; buscar el primero que esté libre de verdad */
+  for (const p of candidatos.slice(1)) {
+    if (!(await responde(p))) return p;           // libre: perfecto
+    if (await esNuestro(p, claveGateway)) return p; // ya nuestro
+    /* ocupado por otro: intentar matar también */
+    if (await matarPuerto(p)) return p;
+  }
+
   return null;
 }
 
