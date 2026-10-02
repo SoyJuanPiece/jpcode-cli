@@ -57,6 +57,18 @@ function clave(ruta) {
   }
 }
 
+/** La versión de jpcode, del package.json que está al lado. Si no se puede leer,
+ *  undefined: mejor que el motor anuncie la suya (que es lo que pasaba antes) a
+ *  que jpcode no arranque. */
+function versionPropia() {
+  try {
+    const pkg = JSON.parse(readFileSync(join(AQUI, "package.json"), "utf8"));
+    return typeof pkg.version === "string" && pkg.version ? pkg.version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /* 1) Config inicial: de ~/.qwen si existía, y si no de la plantilla del gateway,
    que es la que apunta los modelos al proxy. Sin esto, arrancaría sin modelos. */
 if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(QWEN_LEGACY, "settings.json"))) {
@@ -225,12 +237,22 @@ if (!existsSync(entrada)) {
   process.exit(127);
 }
 
+/* La versión que la interfaz anuncia (cabecera, /about, /bug, el item
+   `qwen-version` de la línea de estado) va por entorno porque el motor la lleva
+   escrita en su propio código: `JPCODE_CLI_VERSION` es lo que lee su
+   `getCliVersion()` tras el parche de marca, y `CLI_VERSION` lo que lee su
+   `cli-entry.js` para `jpcode --version`. Van SOLO en el entorno del motor, que
+   es el único que las necesita: el gateway no las tiene por qué, y no deben
+   colarse en las peticiones a los proveedores. */
+const version = versionPropia();
+
 const hijo = spawn(process.execPath, [entrada, ...process.argv.slice(2)], {
   stdio: "inherit",
   env: {
     ...process.env,
     QWEN_HOME: JP_HOME,
     ...(claveGateway ? { OPENCODE_GATEWAY_KEY: claveGateway } : {}),
+    ...(version ? { JPCODE_CLI_VERSION: version, CLI_VERSION: version } : {}),
   },
 });
 hijo.on("error", (e) => {

@@ -4,8 +4,23 @@
  *
  * El banner, tema y subtítulo ya son config (ver sync-jpcode.mjs). Aquí solo
  * quedan las cosas que el motor escribe en código: el título de la ventana del
- * terminal, las cadenas "Qwen Code" de la UI (help, status, diálogos) y el color
- * del spinner del indicador de trabajo.
+ * terminal, las cadenas "Qwen Code" de la UI (help, status, diálogos), el color
+ * del spinner del indicador de trabajo y **la versión que se anuncia**.
+ *
+ * Eso último era un bug de marca: el motor trae su versión (la suya) escrita a
+ * fuego en el código, así que la cabecera decía `jpcode (v0.24.7)` y `jpcode
+ * --version` decía `0.24.7`: jpcode 0.1.9 se anunciaba con el número de otro
+ * programa. No hay ningún ajuste que lo arregle (las 41 claves de la categoría
+ * UI del esquema no tocan la versión, y la propia documentación de
+ * `customBannerTitle` dice que "the version suffix is always appended"), así que
+ * la cosa va por parche.
+ *
+ * El motor es Apache-2.0: se puede modificar, pero hay que dejar constancia de
+ * qué se cambió, y eso está en `engine/NOTICE-jpcode.md`, que genera
+ * `vendor-engine.sh`. La versión del MOTOR se deja viva en
+ * `engine/package.json` —de ella salen `sandboxImageUri` y los pines de
+ * `optionalDependencies`, así que ni se toca— por si hay que reportar un bug
+ * contra él.
  *
  *   node patch-jpcode-brand.mjs
  *
@@ -93,6 +108,24 @@ const ASCII_TOGGLE = '["*","+"]';
 /** Frames del motor: los bonitos, y los ASCII solo en la consola de Windows. */
 const FRAMES_TRABAJO = `(${WIN_LEGACY}?${ASCII_FRAMES}:${frames(FRAMES_VISIBLES)})`;
 
+/* La versión que anuncia la interfaz (cabecera, /about, /bug, el item
+ * `qwen-version` de la línea de estado) salía del MOTOR: un literal en
+ * `getCliVersion()`, la única definición del motor, importada desde 7 chunks. El
+ * `await getPackageJson()` de al lado es código muerto.
+ *
+ * Ahora sale de `JPCODE_CLI_VERSION`, que `bin/jpcode.mjs` le pasa al motor con
+ * la versión de jpcode. Sin la variable sale la del motor, o sea lo de antes: quien
+ * arranque el motor sin el envoltorio sigue siendo coherente consigo mismo. Los
+ * dos renderizadores (ink y opentui) y `config.getCliVersion()` leen esta misma
+ * función, así que este único cambio los arregla todos. */
+const VERSION = "chunk-NJBU56UO.js";
+const VERSION_CAMBIOS = [
+  [
+    'async function getCliVersion(){const pkgJson=await getPackageJson();return"0.24.7"}',
+    'async function getCliVersion(){const pkgJson=await getPackageJson();return process.env.JPCODE_CLI_VERSION??"0.24.7"}',
+  ],
+];
+
 const SPINNER_CAMBIOS = [
   [
     "color:theme.text.primary,children:(0,import_jsx_runtime.jsx)(build_default,{type:spinnerType})",
@@ -149,6 +182,7 @@ console.log(`Motor: ${PKG}`);
 aplicar(TITULO, TITULO_CAMBIOS, 'DEFAULT_WINDOW_TITLE="jpcode"');
 for (const f of TEXTOS) aplicar(f, [["Qwen Code", "jpcode"]], "jpcode");
 aplicar(SPINNER, SPINNER_CAMBIOS, SPINNER_NUEVO);
+aplicar(VERSION, VERSION_CAMBIOS, "JPCODE_CLI_VERSION");
 
 if (cambios) {
   console.log(`\n✅ jpcode: ${cambios} fichero(s) rebrandeados.`);

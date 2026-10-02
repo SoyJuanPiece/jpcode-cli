@@ -104,7 +104,7 @@ repositorio, y se pueden reproducir con \`bash vendor-engine.sh\`:
 
 | Parche | Qué cambia |
 | --- | --- |
-| \`patch-jpcode-brand\` | Textos visibles (título de ventana y cadenas de marca), y color y frames del spinner del indicador de trabajo (fuera el braille, que sale en cuadro; y frames ASCII en la consola clásica de Windows, que tampoco sabe dibujar las formas geométricas). |
+| \`patch-jpcode-brand\` | Textos visibles (título de ventana y cadenas de marca), color y frames del spinner del indicador de trabajo (fuera el braille, que sale en cuadro; y frames ASCII en la consola clásica de Windows, que tampoco sabe dibujar las formas geométricas), y **la versión que se anuncia**: el motor la traía fija en su código, así que jpcode se anunciaba con el número de la versión del motor (`$VERSION`) en vez del suyo. Esa versión del motor se conserva en `engine/package.json`, por si hay que reportar un bug contra él. |
 | \`patch-jpcode-clipboard\` | Sustituye el aviso de pegado de imágenes por uno veraz. |
 | \`patch-jpcode-image-watch\` | Añade el vigilante que adjunta la imagen que llega del puente. |
 | \`patch-jpcode-render\` | Render de ink: deja el renderizador incremental **apagado por defecto** y le añade una guarda de desplazamiento. El incremental escribe 7-10 veces menos (el parpadeo en los terminales web viene de repintar la pantalla 12 veces por segundo), pero cuando el chat crece más que la ventana se rompe la pantalla, así que solo se activa a mano con \`JPCODE_INCREMENTAL_RENDER=1\`. |
