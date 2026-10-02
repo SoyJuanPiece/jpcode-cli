@@ -35,7 +35,7 @@ npm login          # una vez
 bash publish-npm.sh
 ```
 
-`build-dist.sh` minifica y corre las **209 aserciones** sobre el resultado antes de que se suba
+`build-dist.sh` minifica y corre las **227 aserciones** sobre el resultado antes de que se suba
 nada: si la minificación rompe algo, no se publica.
 
 En CI lo hace `.github/workflows/publish-npm.yml` por OIDC, sin tokens ni secretos. La primera
@@ -83,11 +83,65 @@ Dos cosas distintas, y ninguna es «la interfaz»:
   todas las herramientas de entrada: el modelo las llama por su nombre y el puente no se usa.
   Comprobado en una sesión real: el modelo llama a `read_file` directo y `tool_search` /
   `tool_call` no aparecen ni una vez en el registro de la sesión.
-- **`EPERM: operation not permitted, mkdir 'C:\Users\.qwen'`** (en Linux, `EACCES`). El motor
-  guarda estado de proyecto en `<carpeta actual>/.qwen` — ajustes de workspace, *welcome-back*,
-  temporales. Si abres jpcode donde no puedes escribir (`C:\Users`, la raíz de un disco, `/`), esa
-  `mkdir` falla y el error sale dentro de una respuesta del chat. Ábrelo **dentro de la carpeta del
-  proyecto**.
+  - **`EPERM: operation not permitted, mkdir 'C:\Users\.qwen'`** (en Linux, `EACCES`). El motor
+    guarda estado de proyecto en `<carpeta actual>/.qwen` — ajustes de workspace, *welcome-back*,
+    temporales. Si abres jpcode donde no puedes escribir (`C:\Users`, la raíz de un disco, `/`), esa
+    `mkdir` falla y el error sale dentro de una respuesta del chat. Ábrelo **dentro de la carpeta del
+    proyecto**.
+
+### Si la terminal parpadea cuando el modelo está pensando
+
+No debería pasar: `patch-jpcode-render.mjs` lo quita. Si aun así lo ves, arranca jpcode con
+`JPCODE_INCREMENTAL_RENDER=0` para confirmar que es eso (y si lo es, dilo: el escape existe justo
+para poder volver atrás).
+
+El motor pinta la interfaz con el renderizador **estándar** de ink, que no diffing: en cada cuadro
+borra todas las líneas del anterior y las reescribe enteras. Mientras el modelo piensa eso pasa
+**12 veces por segundo** (el spinner gira cada 80 ms y el contador de tokens cada 100 ms), y el
+cuadro incluye el banner de 6 líneas con degradado. En un terminal local no se nota; donde el pintado
+va por la red —el terminal web de VS Code, Cloud Workstations— se ve la pantalla quedándose en negro
+y volviéndose a pintar.
+
+El motor trae ya escrito un segundo renderizador que **sí** compara línea a línea, pero viene
+**apagado** (`incrementalRendering: false` en `render()`). `patch-jpcode-render.mjs` lo enciende.
+Medido en la misma sesión de 30 s, con el mismo modelo:
+
+| | cuadros | `ESC[2K` (borrar línea) | bytes escritos |
+| --- | --- | --- | --- |
+| antes | 323 | 5 670 | 1 793 784 |
+| después | 309 | **7** | **73 294** |
+
+Un giro del spinner pasa de reescribir once líneas a reescribir **una**. Con
+`JPCODE_INCREMENTAL_RENDER=0` se deja como estaba, por si algún terminal concreto saliera peor.
+
+### Si el modo auto dice que no está disponible
+
+```
+Auto Mode couldn't classify this action (Classifier stage 1 unavailable).
+Review it manually. Switching to Default Mode is recommended if you want to
+continue without the classifier.
+```
+
+No es un fallo del modo ni de tu configuración: **es el gateway**. El modo auto no pregunta «¿me
+das permiso?» — le pide a un modelo que **clasifique** cada acción, y para eso el motor llama a
+`generateJson`, que no pide JSON en texto sino una **llamada a función forzada** (`respond_in_schema`
+con `tool_choice: "required"`). El tier gratis de Zen no emite tool calls: es la receta que hace
+pasar el gate (las 11 tools oficiales tienen que estar en el cuerpo, y si se describen como
+llamables los modelos las llaman y contestan con texto vacío). Comprobado contra el upstream real:
+con `tool_choice: "required"` el modelo devuelve `content: ""` o frases en prosa; con
+`tool_choice: "none"` devuelve `{ "shouldBlock": false }` limpio.
+
+`gateway/forced-tools.mjs` traduce una en la otra: al modelo se le pide el JSON (con el esquema
+delante, `tool_choice: "none"` y las tools de relleno intactas, que el gate necesita) y de vuelta se
+fabrica el `tool_calls` que el cliente esperaba, aunque el JSON venga en valla de markdown o con
+prosa alrededor. Verificado contra `big-pickle`, `mimo-v2.6-flash-free` y `longcat-2.5-preview-free`
+con la petición real del clasificador: antes `tool_calls: null`; después, la llamada con
+`{"shouldBlock":false}` para una acción segura y `{"shouldBlock":true}` para una peligrosa.
+
+Lo mismo arregla todo lo demás que va por `generateJson` (modelo rápido, compactación, advisor).
+Solo toca peticiones **sin streaming**, que es lo único que el motor usa para pedir JSON; las demás
+salen byte a byte como antes.
+
 
 ## Qué incluye
 
@@ -172,12 +226,13 @@ Dos cosas distintas, y ninguna es «la interfaz»:
 | `patch-jpcode-clipboard.mjs` | Cambia el aviso de pegado de imagen por uno veraz y accionable. |
 | `img-bridge.mjs` | Puente: servidor + página para pegar la imagen desde el navegador. |
 | `patch-jpcode-image-watch.mjs` | Adjunta sola en el prompt la imagen que llega del puente. |
+| `patch-jpcode-render.mjs` | Enciende el renderizador incremental de ink: sin él la pantalla parpadea al pensar. |
 | `theme.json` | Paleta del tema `jpcode`. |
 | `install.sh` | Instalación desde el código: trae el motor, piezas nativas, config, tema y binario. |
 | `gateway/` | El gateway (proxy + catálogo + envoltorio `qwen`), sin dependencias. |
 | `sync-gateway.sh` | Refresca `gateway/` desde tu copia de trabajo de opencode-chat. |
-| `vendor-engine.sh` | Trae el motor a `engine/` y le aplica los 9 parches de jpcode en la construcción. |
-| `build-dist.sh` | Minifica y prueba el paquete (209 aserciones). Es el gate antes de publicar. |
+| `vendor-engine.sh` | Trae el motor a `engine/` y le aplica los 10 parches de jpcode en la construcción. |
+| `build-dist.sh` | Minifica y prueba el paquete (227 aserciones). Es el gate antes de publicar. |
 | `publish-npm.sh` | Publica en npm lo que dejó `build-dist.sh`, con npm o con `--bun`. |
 
 La parte «tipo OpenCode» son los parches que `vendor-engine.sh` aplica al motor al traerlo:
@@ -275,7 +330,7 @@ node sync-jpcode.mjs --print              # ver qué se escribiría en settings.
 node patch-jpcode-brand.mjs               # re-aplicar la marca tras `qwen update`
 node patch-jpcode-clipboard.mjs           # aviso de pegado de imagen veraz
 node patch-jpcode-image-watch.mjs         # que jpcode adjunte lo que llega del puente
-node gateway/test.mjs                     # pruebas del gateway (209 aserciones)
+node gateway/test.mjs                     # pruebas del gateway (227 aserciones)
 QWEN_HOME=~/.jpcode node sync-jpcode.mjs
 bash build-dist.sh                        # minifica y prueba (no publica)
 bash publish-npm.sh                       # y esto lo sube a npm

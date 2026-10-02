@@ -41,7 +41,7 @@ jobs:
         run: npm install -g npm@latest
 
       # build-dist.sh minifica con bun, y bun también hace de gate: el paquete
-      # minificado corre las 209 aserciones antes de que se publique nada.
+      # minificado corre las 227 aserciones antes de que se publique nada.
       - uses: oven-sh/setup-bun@v2
 
       - name: Construir, probar y publicar

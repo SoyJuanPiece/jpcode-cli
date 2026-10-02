@@ -760,10 +760,44 @@ Las 11 tools son obligatorias, pero si las describes de forma neutra los modelos
 llamarlas** y devuelven texto vacío. `tool_choice: "none"` no lo evita. Lo que sí: describirlas
 como no disponibles y pedirlo en el `system`. Con eso, 0 tool calls en los 5 modelos probados.
 
+### Tool calls forzadas: el puente de `forced-tools.mjs`
+
+La receta anterior tiene un precio: **ningún modelo del tier gratis emite `tool_calls`**, y hay
+clientes que no lo necesitan para responder sino para *llamar*. El caso grande es `generateJson`
+de Qwen Code, que no pide JSON en texto sino una tool (`respond_in_schema`, con el esquema de la
+respuesta) y `tool_choice: "required"`. Y su mayor usuario es el **modo auto**, cuyo clasificador
+decide con esa llamada si una acción se permite; si falla, el chat avisa
+
+```
+Auto Mode couldn't classify this action (Classifier stage 1 unavailable). Review it manually.
+```
+
+y el modo auto no puede aprobar nada. Lo mismo pasa con el modelo rápido, la compactación y el
+advisor.
+
+`forced-tools.mjs` traduce una en la otra, solo en el camino **sin streaming** (que es lo único que
+el motor usa para pedir JSON):
+
+- **Hacia el modelo**: `tool_choice: "none"` + una instrucción en el `system` de que responda con el
+  JSON que habrían sido los argumentos, con el esquema delante. Las 11 tools de relleno se quedan,
+  que sin ellas no se pasa el gate. Comprobado contra el upstream real: `mimo-v2.6-flash-free` con
+  la petición del clasificador devuelve `{ "shouldBlock": false }` limpio, y antes devolvía
+  `content: ""`.
+- **Hacia el cliente**: si en la respuesta hay un objeto JSON —da igual si viene pelado, en valla de
+  markdown (` ```json `) o con prosa alrededor— se fabrica el `tool_calls` que el cliente esperaba y
+  el `content` se deja vacío, como en cualquier respuesta con tool call.
+
+Se aplica solo cuando se puede saber **qué** función se forzaba (`tool_choice: "required"` con una
+única tool, o `tool_choice` nombrándola) y su esquema es un objeto. Con varias tools y `required`,
+con `tool_choice: "auto"` (una sesión normal) o con un esquema que no sea objeto, la petición sale
+tal cual entró. En los proveedores del catálogo de models.dev, que sí saben llamar funciones, solo
+se aplica la mitad de vuelta: la petición no se toca.
+
+
 ## Tests
 
 ```bash
-node test.mjs     # 209 comprobaciones, sin navegador y sin gastar cuota
+node test.mjs     # 227 comprobaciones, sin navegador y sin gastar cuota
 ```
 
 1. **El servidor de verdad**, arrancado como proceso hijo contra un **Zen falso local** que

@@ -40,7 +40,7 @@ fi
 NOMBRE="$(node -p "require('./package.json').name")"
 VERSION="$(node -p "require('./package.json').version")"
 
-# 1) build-dist.sh minifica y corre las 209 aserciones sobre el resultado. Si la
+# 1) build-dist.sh minifica y corre las 227 aserciones sobre el resultado. Si la
 #    minificación rompe algo, aborta y aquí no se publica nada.
 bash "$AQUI/build-dist.sh"
 

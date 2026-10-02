@@ -14,7 +14,7 @@
 # evita que se lea de un vistazo.
 #
 # Lo que SÍ es serio: el paquete minificado pasa el juego completo de pruebas
-# (209 aserciones). Si la minificación rompe algo, publish-npm.sh no publica.
+# (227 aserciones). Si la minificación rompe algo, publish-npm.sh no publica.
 set -euo pipefail
 
 AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -58,7 +58,7 @@ rm -rf "$MOTOR/examples" "$MOTOR/docs" 2>/dev/null || true
 
 echo "→ aplicando los parches de jpcode sobre el motor (en el build, no al instalar)"
 FALLADOS=""
-for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch; do
+for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render; do
   if [ -f "$AQUI/$p.mjs" ]; then
     if ! QWEN_PKG="$MOTOR" node "$AQUI/$p.mjs" >/dev/null 2>&1; then
       FALLADOS="$FALLADOS $p"
@@ -79,7 +79,7 @@ if [ -n "$FALLADOS" ]; then
   echo "    para ver el error:  QWEN_PKG=$MOTOR node <parche>.mjs" >&2
   exit 1
 fi
-echo "   los 9 parches, aplicados"
+echo "   los 10 parches, aplicados"
 
 # Comprobación mínima: que el motor siga parseando después de parchearlo.
 for f in "$MOTOR/cli-entry.js" "$MOTOR/chunks/startInteractiveUI-ZKYQSLKT.js"; do
@@ -107,6 +107,7 @@ repositorio, y se pueden reproducir con \`bash vendor-engine.sh\`:
 | \`patch-jpcode-brand\` | Textos visibles (título de ventana y cadenas de marca), y color y frames del spinner del indicador de trabajo (fuera el braille, que sale en cuadro; y frames ASCII en la consola clásica de Windows, que tampoco sabe dibujar las formas geométricas). |
 | \`patch-jpcode-clipboard\` | Sustituye el aviso de pegado de imágenes por uno veraz. |
 | \`patch-jpcode-image-watch\` | Añade el vigilante que adjunta la imagen que llega del puente. |
+| \`patch-jpcode-render\` | Enciende el renderizador incremental de ink, que solo reescribe las líneas que cambian. Sin él, cada giro del indicador de trabajo borraba y repintaba la pantalla entera 12 veces por segundo, que es el parpadeo en los terminales web. |
 | \`patch-qwen-search\` | Buscador en /model. |
 | \`patch-qwen-providers\` | Catálogo completo de models.dev en el diálogo de conexión. |
 | \`patch-qwen-auth\` | Buscador en el diálogo de conexión. |

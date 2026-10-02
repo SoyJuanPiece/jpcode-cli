@@ -19,6 +19,7 @@ import {
 } from "./providers.mjs";
 import { protocolo } from "./protocols.mjs";
 import { ZEN_UA, ocId } from "./ids.mjs";
+import { conToolCall, detectaForzada, forzarComoJson } from "./forced-tools.mjs";
 
 /**
  * Servidor estático + gateway, sin dependencias.
@@ -605,16 +606,27 @@ createServer(async (req, res) => {
           sendJson(res, 502, { error: { message: `respuesta ilegible de "${objetivo.target.providerID}": ${err.message}`, type: "upstream_error" } });
           return;
         }
+        // Estos proveedores sí saben llamar funciones, así que la petición se manda
+        // tal cual. Lo único que se recoge es el caso en que, aun así, contestan con
+        // el JSON en el texto en vez de con la llamada (ver forced-tools.mjs).
         // OJO: sendJson(res, status, obj, extra) — el tipo ya lo pone él. Pasar
         // aquí el content-type como 4º argumento lo metería en las cabeceras.
-        sendJson(res, 200, respuestaOpenAI(partes, body.model), comunes);
+        sendJson(res, 200, conToolCall(respuestaOpenAI(partes, body.model), detectaForzada(body)), comunes);
         return;
       }
 
       /* ---- tier gratis de Zen ---- */
       const model = objetivo.zen;
       const quiereStream = Boolean(body.stream);
-      const payload = { ...body, model };
+      let payload = { ...body, model };
+      /* El tier gratis NO emite tool calls —es la receta, no un fallo: ver
+         forced-tools.mjs— y el motor usa llamadas forradas para todo lo que va por
+         `generateJson`, empezando por el clasificador del modo auto. Aquí se
+         traducen a JSON en texto y, al volver, se fabrica el `tool_calls` que el
+         cliente esperaba. Solo sin streaming: es lo único que el motor usa para
+         pedir JSON, y el camino con stream se queda byte a byte como estaba. */
+      let forzado = null;
+      if (!quiereStream) ({ body: payload, forzado } = forzarComoJson(payload));
       delete payload.stream;
 
       const upstream = await zen("/chat/completions", payload);
@@ -626,7 +638,7 @@ createServer(async (req, res) => {
         await pipeSse(res, upstream);
         return;
       }
-      sendJson(res, 200, aFormatoOpenAI(await upstream.text(), model));
+      sendJson(res, 200, conToolCall(aFormatoOpenAI(await upstream.text(), model), forzado));
       return;
     }
 

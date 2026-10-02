@@ -87,6 +87,23 @@ function startFakeZen() {
           return;
         }
         res.writeHead(200, { "Content-Type": "text/event-stream" });
+        // El puente de tool calls forzadas (forced-tools.mjs) traduce la llamada a
+        // "responde con este JSON". Así responden los del tier gratis, que no emiten
+        // tool calls: longcat lo dice limpio y en valla, nemotron mete prosa antes.
+        const forzado = (body.messages || []).some(
+          (m) => typeof m.content === "string" && m.content.includes("would have been the arguments of the function"),
+        );
+        if (forzado) {
+          const json = '{"shouldBlock":false}';
+          const partes = body.model === "nemotron-3.5-lightning-free"
+            ? [{ content: "Let me think. The answer is: " + json + " — hope that helps." }]
+            : [{ content: "```json\n" + json + "\n```" }];
+          for (const p of partes) res.write(`data: ${JSON.stringify({ choices: [{ delta: p }] })}\n\n`);
+          res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "stop" }] })}\n\n`);
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        }
         // Solo la ruta de Claude Code (/v1/messages con herramientas) usa
         // tool_choice:"auto"; ahí el modelo "decide" llamar a una herramienta.
         if (body.tool_choice === "auto") {
@@ -280,6 +297,89 @@ try {
     body: JSON.stringify({ model: "gpt-5.5", messages: [{ role: "user", content: "hola" }] }),
   });
   ok(modeloRaro.status === 404, "un modelo que no es gratis da 404, no un error raro del upstream");
+
+  /* --- tool call forzada: el puente que hace funcionar el modo auto ---
+     El motor pide el JSON de `generateJson` con una tool (`respond_in_schema`) y
+     `tool_choice:"required"`. El tier gratis no emite tool calls, así que el proxy
+     lo traduce a "responde con el JSON" y devuelve la llamada que el cliente esperaba.
+     Sin esto, el clasificador del modo auto sale como "unavailable" y el modo auto
+     no puede aprobar nada. */
+  const CLASIF_SCHEMA = { type: "object", required: ["shouldBlock"], additionalProperties: false, properties: { shouldBlock: { type: "boolean" } } };
+  const clasificador = (extra = {}) => ({
+    method: "POST",
+    headers: { Authorization: `Bearer ${GKEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "longcat-2.5-preview-free",
+      messages: [
+        { role: "system", content: "Eres el clasificador del modo auto." },
+        { role: "user", content: "¿`ls -la` es seguro?" },
+      ],
+      tools: [{ type: "function", function: { name: "respond_in_schema", description: "Provide the response in provided schema", parameters: CLASIF_SCHEMA } }],
+      tool_choice: "required",
+      max_tokens: 256,
+      ...extra,
+    }),
+  });
+
+  const cls = await (await fetch(`${BASE}/v1/chat/completions`, clasificador())).json();
+  const llamada = cls.choices?.[0]?.message?.tool_calls?.[0];
+  ok(llamada?.type === "function" && llamada?.function?.name === "respond_in_schema", "una tool forzada vuelve como tool call", JSON.stringify(cls.choices?.[0]?.message).slice(0, 90));
+  ok(llamada?.function?.arguments === '{"shouldBlock":false}', "con los argumentos que pidió el esquema", llamada?.function?.arguments);
+  ok(cls.choices?.[0]?.message?.content === "", "una respuesta con tool call no lleva texto al lado");
+  ok(zen.visto.body.tool_choice === "none", "al modelo se le pide texto, no una llamada (el tier no las hace)");
+  ok(/would have been the arguments of the function `respond_in_schema`/.test(zen.visto.body.messages[0].content), "el system lleva la instrucción de responder con el JSON");
+  ok(zen.visto.body.messages[0].content.includes('"shouldBlock"'), "y el esquema, para que no se lo invente");
+  ok(OFICIALES.every((n) => (zen.visto.body.tools || []).some((t) => t.function?.name === n)), "las 11 tools oficiales siguen ahí: el gate del tier depende de ellas");
+
+  // La valla de markdown y la prosa alrededor también valen: lo que se busca es el objeto.
+  const clsValla = await (await fetch(`${BASE}/v1/chat/completions`, clasificador({ model: "nemotron-3.5-lightning-free" }))).json();
+  ok(clsValla.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments === '{"shouldBlock":false}', "saca el JSON aunque venga en valla o con prosa alrededor");
+
+  // `tool_choice` con la función nombrada es la otra forma de forzarla.
+  const clsNombrada = await (await fetch(`${BASE}/v1/chat/completions`, clasificador({ tool_choice: { type: "function", function: { name: "respond_in_schema" } } }))).json();
+  ok(clsNombrada.choices?.[0]?.message?.tool_calls?.[0]?.function?.name === "respond_in_schema", "también con tool_choice nombrando la función");
+
+  // Lo que NO se toca: streaming, tool_choice "auto" (una sesión normal) y "required"
+  // con varias tools, donde no se sabe cuál se forzaba.
+  const clsStream = await fetch(`${BASE}/v1/chat/completions`, clasificador({ stream: true }));
+  const clsStreamTxt = await clsStream.text();
+  ok(zen.visto.body.tool_choice === "required", "con stream:true el puente no se mete (lo que usa stream va como iba)");
+  ok(clsStream.headers.get("content-type").startsWith("text/event-stream"), "y sigue siendo SSE");
+
+  const auto = await (await fetch(`${BASE}/v1/chat/completions`, {
+    method: "POST", headers: { Authorization: `Bearer ${GKEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "big-pickle", messages: [{ role: "user", content: "hola" }], tools: [{ type: "function", function: { name: "read", parameters: { type: "object" } } }], tool_choice: "auto" }),
+  })).json();
+  ok(zen.visto.body.tool_choice === "auto", "una sesión normal (tool_choice auto) se manda tal cual");
+  ok(!auto.choices?.[0]?.message?.tool_calls, "y no se le fabrica una tool call");
+
+  const dosTools = await (await fetch(`${BASE}/v1/chat/completions`, {
+    method: "POST", headers: { Authorization: `Bearer ${GKEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "big-pickle",
+      messages: [{ role: "user", content: "hola" }],
+      tools: [
+        { type: "function", function: { name: "una", parameters: { type: "object" } } },
+        { type: "function", function: { name: "otra", parameters: { type: "object" } } },
+      ],
+      tool_choice: "required",
+    }),
+  })).json();
+  ok(zen.visto.body.tool_choice === "required", "con varias tools y required no se sabe cuál es: se deja como está");
+  ok(!dosTools.choices?.[0]?.message?.tool_calls, "y no se inventa ninguna llamada");
+
+  const esquemaRaro = await (await fetch(`${BASE}/v1/chat/completions`, {
+    method: "POST", headers: { Authorization: `Bearer ${GKEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "big-pickle",
+      messages: [{ role: "user", content: "hola" }],
+      tools: [{ type: "function", function: { name: "lista", parameters: { type: "array" } } }],
+      tool_choice: { type: "function", function: { name: "lista" } },
+    }),
+  })).json();
+  ok(zen.visto.body.tool_choice?.type === "function", "un esquema que no es objeto no se traduce: mejor el intento original");
+  ok(!esquemaRaro.choices?.[0]?.message?.tool_calls, "y no se fabrica una llamada con argumentos inventados");
+  ok(esquemaRaro.choices?.[0]?.message?.content === "Hola mundo", "la respuesta normal llega intacta");
 
   // Puede existir un .api-key de un arranque real: lo que se comprueba es que el
   // server no haya escrito en él la clave del test.
