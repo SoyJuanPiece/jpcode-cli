@@ -384,6 +384,145 @@ bash build-dist.sh                        # minifica y prueba (no publica)
 bash publish-npm.sh                       # y esto lo sube a npm
 ```
 
+## Tarea abierta: 0.2.0 está commiteada y subida, pero NO publicada en npm
+
+> Esto es un informe para quien venga a terminar el trabajo (humano o IA). Está aquí
+> porque el bloqueo es concreto y ya está diiagnosticado; no hace falta volver a
+> investigarlo desde cero.
+
+### Qué pasa
+
+`bash publish-npm.sh` construye, minifica y corre la suite completa del paquete **antes** de
+subir nada. La suite falla y el guard corta, que es lo que debe hacer:
+
+```
+✗ las pruebas fallan en el paquete minificado — NO se publica
+  ❌ solo se enseña el proveedor conectado — google, groq
+  ❌ con ?all=1 salen todos pero `usables` dice la verdad — data=5 usables=2
+  ❌ tras conectar anthropic ya se enseña — anthropic, google, groq
+  ❌ desactivado deja de aparecer aunque tenga clave
+  ❌ y se vuelve a activar
+  ❌ y NO los de los que no lo están
+  ❌ Google: autentica con x-goog-api-key
+❌ 7 comprobación(es) fallida(s)
+```
+
+7 de 226. Todas del bloque **«catálogo de proveedores y estado»** de `gateway/test.mjs`. Las
+otras 219 pasan, incluidas las de Anthropic, Google, enrutado a cada proveedor, streaming, tokens
+y `sync-qwen-models`.
+
+### Causa raíz: las pruebas no son herméticas
+
+**No es un bug del gateway. Es una fuga de claves reales del entorno de quien las corre.**
+
+`gateway/providers.mjs:249` — `credencial()` lee el **`process.env` del proceso**, no el entorno
+que el test le pasa al servidor:
+
+```js
+export function credencial(id, prov, cfg) {
+  for (const nombre of prov?.env || []) {
+    const v = process.env[nombre];          // ← ambient, no el del test
+    if (v) return { key: v, source: `env:${nombre}` };
+  }
+  if (cfg?.auth?.[id] …) return …;           // auth.json va DESPUÉS
+```
+
+El test (`gateway/test.mjs:874-902`) levanta el servidor con un catálogo de 5 proveedores de
+prueba y un `PROVIDERS_FILE`/`PROVIDERS_AUTH_FILE` nuevos en un temporal, y espera que
+`credencial()` solo vea las claves que él pasa:
+
+```js
+startServer(zen2.port, 8098, true, {
+  MODELS_CACHE_FILE: cacheFile,
+  PROVIDERS_FILE:     join(dir, "providers.json"),
+  PROVIDERS_AUTH_FILE: join(dir, "auth.json"),
+  GROQ_API_KEY: "gsk_de_prueba",
+  SIN_API_KEY:  "x",
+});
+```
+
+El catálogo de prueba declara `google` con `env: ["GOOGLE_API_KEY"]`. Si esa variable está puesta
+en la shell de quien corre las pruebas, `credencial()` la encuentra **antes** que `auth.json`, y
+`google` pasa a estar «conectado» para todo el bloque. De ahí los 7 fallos, uno a uno:
+
+| Comprobación | Espera | Obtiene | Por qué |
+| --- | --- | --- | --- |
+| `solo se enseña el proveedor conectado` (`test.mjs:910`) | `["groq"]` | `google, groq` | google cuenta como conectado |
+| `?all=1 … usables dice la verdad` (`test.mjs:913`) | `usables === 1` | `usables === 2` | idem, suma google |
+| `tras conectar anthropic ya se enseña` (`test.mjs:931`) | 2 proveedores | 3 | idem |
+| `desactivado deja de aparecer` (`test.mjs:935`) | 1 | 2 | idem |
+| `y se vuelve a activar` (`test.mjs:937`) | 2 | 3 | idem |
+| `y NO los de los que no lo están` (`test.mjs:943`) | que `google/gemini-2.5-flash` **no** esté | sí está | sus modelos ya se listan |
+| `Google: autentica con x-goog-api-key` (`test.mjs:977`) | `"goog-de-prueba"` | la clave real de la shell | el test la guarda por `POST /v1/providers/google/key`, pero `credencial()` prefiere `process.env` |
+
+`sinapi` **no** falla y no debe tocarse: el fixture no le da `api`, así que `usable` sale falso
+por `Boolean(urlBase)` (`providers.mjs:294`). Eso es correcto y es justo lo que el test comprueba.
+
+### Cómo reproducirlo (30 segundos)
+
+Con la variable puesta en la shell, el bloque falla:
+
+```bash
+cd gateway && node test.mjs 2>&1 | grep -E "❌|comprobación"
+```
+
+Sin ella, **la suite entera pasa**:
+
+```bash
+cd gateway && env -u GOOGLE_API_KEY node test.mjs | tail -1
+# ✅ todo bien
+```
+
+Eso lo comprobó, y es la prueba de que la causa es el entorno y no el gateway. También:
+
+```bash
+env | grep GOOGLE_API_KEY    # si esto imprime algo, el bloque falla
+```
+
+Por eso esto sale en unas máquinas y en otras no, y por eso **no se debe «arreglar» el gateway**:
+el gateway hace bien lo que hace.
+
+### Arreglo recomendado
+
+Que el test no dependa de la shell de quien lo corre. Dos vías, en este orden de preferencia:
+
+1. **Aislar el entorno en el test** (lo menos invasivo). En `gateway/test.mjs`, antes de
+   `startServer`, guardar y limpiar las variables de proveedor que el catálogo de prueba declara, y
+   restaurarlas en el `finally` que ya hay. Lo que hay que cubrir es, como mínimo,
+   `GOOGLE_API_KEY`, `GROQ_API_KEY`, `SIN_API_KEY`, `ANTHROPIC_API_KEY` y `AWS_ACCESS_KEY_ID`
+   (esta última la mira `amazon-bedrock`, que también sale en el catálogo de prueba).
+2. **Que `credencial()` no lea el entorno ambient** — por ejemplo que `startServer` inyecte las
+   variables que recibe en un objeto y que `credencial()` lo consulte primero. Es el arreglo de
+   raíz, pero toca el runtime del gateway y es un cambio de más alcance: **no lo hagas sin
+   motivo**.
+
+Lo que **no** hay que hacer es tocar las aserciones para que esperen `google`: el test tiene razón,
+el entorno es que miente.
+
+### Publicar, una vez en verde
+
+```bash
+bash publish-npm.sh --dry-run     # construye y prueba, sin subir nada
+bash publish-npm.sh               # construye, prueba y publica
+```
+
+Hace falta `npm login` con la cuenta del paquete (`juanpiecedev`). La 0.2.0 está libre y el
+árbol ya está limpio y subido a `main`, así que no hay nada más que commitear.
+
+### Qué lleva la 0.2.0 (no lo toques al publicar)
+
+- `ui.useTerminalBuffer: false` — el historial va al scrollback del terminal en vez de entrar en el
+  cuadro que se repinta, que es lo que hacía crecer el parpadeo al bajar. Sale en `sync-jpcode.mjs`
+  y se respeta si el usuario ya lo había elegido.
+- La versión que se anuncia es la de jpcode (`JPCODE_CLI_VERSION`), no la del motor.
+
+Un par de comprobaciones rápidas para confirmar que la 0.2.0 es la que quieres subir:
+
+```bash
+npm view @juanpiecedev/jpcode versions --json | tail -3   # 0.2.0 no debe aparecer todavía
+node -p "require('./package.json').version"                # debe decir 0.2.0
+```
+
 ## Base legal
 
 Se construye sobre **Qwen Code**, publicado bajo **Apache-2.0**: abierto, editable y
