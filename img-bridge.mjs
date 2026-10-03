@@ -176,15 +176,26 @@ const enviar = async (blob, origen) => {
 const imagenesDe = (lista) => Array.from(lista || []).filter((f) => f.type.startsWith("image/"));
 
 addEventListener("paste", (e) => {
-  const imgs = imagenesDe(e.clipboardData?.files?.length ? e.clipboardData.files : e.clipboardData?.items);
-  if (!imgs.length) {
-    const items = Array.from(e.clipboardData?.items || []);
-    const blobs = items.filter((i) => i.kind === "file" && i.type.startsWith("image/")).map((i) => i.getAsFile());
-    if (blobs.length) { e.preventDefault(); blobs.forEach((b) => enviar(b, "pegado")); return; }
-    return;
+  const items = Array.from(e.clipboardData?.items || []);
+  const files = Array.from(e.clipboardData?.files || []);
+  const blobs = [];
+
+  for (const f of files) {
+    if (f.type && f.type.startsWith("image/")) blobs.push(f);
   }
-  e.preventDefault();
-  imgs.forEach((b) => enviar(b, "pegado"));
+  for (const item of items) {
+    if (item.kind === "file" && item.type && item.type.startsWith("image/")) {
+      const b = item.getAsFile();
+      if (b && !blobs.some((x) => x.size === b.size && x.name === b.name)) blobs.push(b);
+    }
+  }
+
+  if (blobs.length > 0) {
+    e.preventDefault();
+    blobs.forEach((b) => enviar(b, "pegado"));
+  } else {
+    fila("err", "El contenido pegado no contiene ninguna imagen.");
+  }
 });
 
 ["dragenter", "dragover"].forEach((ev) => addEventListener(ev, (e) => { e.preventDefault(); zona.classList.add("hot"); }));

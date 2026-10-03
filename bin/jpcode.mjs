@@ -45,8 +45,52 @@ const GATEWAY =
   process.env.OPENCODE_GATEWAY_DIR ||
   (existsSync(join(AQUI, "gateway", "server.mjs")) ? join(AQUI, "gateway") : join(HOME, "studio", "opencode-chat"));
 const PUERTO = Number(process.env.OPENCODE_PROXY_PORT || 8096);
+const VERBOSE = process.env.JPCODE_VERBOSE === "1";
 
-const aviso = (m) => console.error(`→ jpcode: ${m}`);
+const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+let spinnerIndex = 0;
+let spinnerInterval = null;
+let currentSpinnerText = "";
+
+function startSpinner(text) {
+  if (VERBOSE || !process.stderr.isTTY) {
+    if (text) console.error(`→ jpcode: ${text}`);
+    return;
+  }
+  currentSpinnerText = text;
+  if (!spinnerInterval) {
+    spinnerInterval = setInterval(() => {
+      spinnerIndex = (spinnerIndex + 1) % FRAMES.length;
+      process.stderr.write(`\r\x1b[36m${FRAMES[spinnerIndex]}\x1b[0m \x1b[90mjpcode:\x1b[0m ${currentSpinnerText}\x1b[K`);
+    }, 80);
+  }
+}
+
+function updateSpinner(text) {
+  if (VERBOSE || !process.stderr.isTTY) {
+    if (text) console.error(`→ jpcode: ${text}`);
+    return;
+  }
+  currentSpinnerText = text;
+}
+
+function stopSpinner() {
+  if (spinnerInterval) {
+    clearInterval(spinnerInterval);
+    spinnerInterval = null;
+    if (process.stderr.isTTY) {
+      process.stderr.write("\r\x1b[K");
+    }
+  }
+}
+
+const aviso = (m) => {
+  if (VERBOSE) {
+    console.error(`→ jpcode: ${m}`);
+  } else {
+    updateSpinner(m);
+  }
+};
 
 /** Lee un fichero de clave y devuelve undefined si no está o está vacío. */
 function clave(ruta) {
@@ -92,6 +136,8 @@ function versionPropia() {
     return undefined;
   }
 }
+
+startSpinner("Iniciando servicios de jpcode…");
 
 /* 1) Config inicial: de ~/.qwen si existía, y si no de la plantilla del gateway,
    que es la que apunta los modelos al proxy. Sin esto, arrancaría sin modelos. */
@@ -382,6 +428,8 @@ if (!existsSync(entrada)) {
    es el único que las necesita: el gateway no las tiene por qué, y no deben
    colarse en las peticiones a los proveedores. */
 const version = versionPropia();
+
+stopSpinner();
 
 const hijo = spawn(process.execPath, [entrada, ...process.argv.slice(2)], {
   stdio: "inherit",
