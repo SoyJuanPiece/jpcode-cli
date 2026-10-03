@@ -341,9 +341,22 @@ function partesDelSse(sse) {
       herramientas.set(k, acc);
     }
   }
+  /* Una entrada sin nombre no es una herramienta: el streamingOpenAI manda
+     trozos de relleno (`{index:0}`, o solo los argumentos del último trozo), y
+     en el stream de MiniMax llegan sueltas. Contarlas como tool_calls hacía que
+     `partes.toolCalls.length` fuera cierto y el extractor del texto —que es lo
+     único que funciona con este modelo— se descartase entero, dejando al motor
+     con una llamada sin nombre que no puede ejecutar. */
+  const completas = [...herramientas.values()].filter((t) => t.name && t.name.trim());
+  if (herramientas.size !== completas.length) {
+    console.error(
+      `[jpcode-gateway] ${herramientas.size - completas.length} tool_call(s) sin nombre ` +
+        `descartados; se usará el texto del modelo.`,
+    );
+  }
   return {
     id, content, reasoning, finish, usage,
-    toolCalls: [...herramientas.values()].map((t) => ({ id: t.id, type: "function", function: { name: t.name, arguments: t.args } })),
+    toolCalls: completas.map((t) => ({ id: t.id, type: "function", function: { name: t.name, arguments: t.args } })),
   };
 }
 
@@ -454,8 +467,7 @@ function extraerToolCallsDeTexto(content) {
   const vistos = new Set();
   while ((m = invokeRe.exec(limpio)) !== null) {
     const nombre = m[1].trim();
-    if (!nombre || vistos.has(nombre)) continue;
-    vistos.add(nombre);
+    if (!nombre) continue;
 
     // El cuerpo de esta invocación va de aquí hasta la siguiente <invoke> o
     // </invoke>. Es más fiable que un `[^>]*` porque el cierre a veces no viene.
@@ -478,6 +490,16 @@ function extraerToolCallsDeTexto(content) {
       if (pm[2] !== undefined) args[pm[1]] = pm[2];
       else if (pm[3] !== undefined) args[pm[1]] = Number(pm[3]);
     }
+
+    /* La deduplicación va por nombre **y argumentos**, no solo por nombre: el
+       modelo mete dos glob seguidos en el mismo bloque, y son llamadas
+       distintas (una para listar y otra para buscar index.html). Deduplicando
+       por nombre se comía la segunda. Lo que sí se repite —y es lo que induce a
+       quitar duplicados— es el mismo bloque reemitido por el streaming, que cae
+       igual en la clave. */
+    const clave = `${nombre} ${JSON.stringify(args)}`;
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
 
     toolCalls.push(mk(nombre, args));
   }

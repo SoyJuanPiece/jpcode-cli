@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { CAPTURA_0_2_13, CAPTURA_SIN_INVISIBLES } from "./fixtures-toolcalls.mjs";
+import { CAPTURA_0_2_13, CAPTURA_SIN_INVISIBLES, CAPTURA_0_2_14 } from "./fixtures-toolcalls.mjs";
 
 /* Se extrae la función tal cual está en server.mjs —copiada, no reimplementada—
    para que la prueba falle si el servidor deja de soportarlo. */
@@ -11,6 +11,12 @@ writeFileSync("/tmp/jpcode-tc.cjs", `${s.slice(i, j)}\nmodule.exports={extraerTo
 const require_ = createRequire(import.meta.url);
 const { extraerToolCallsDeTexto: E } = require_("/tmp/jpcode-tc.cjs");
 
+/* La otra mitad del problema: cómo se lee el SSE de Zen antes de mirar el texto. */
+const i2 = s.indexOf("function partesDelSse");
+const j2 = s.indexOf("\n/**", i2 + 10);
+writeFileSync("/tmp/jpcode-pds.cjs", `${s.slice(i2, j2)}\nmodule.exports={partesDelSse};`);
+const { partesDelSse } = require_("/tmp/jpcode-pds.cjs");
+
 let fallos = 0;
 const check = (nombre, ok, detalle = "") => {
   if (!ok) fallos++;
@@ -18,7 +24,22 @@ const check = (nombre, ok, detalle = "") => {
 };
 
 /* --- el caso de la captura, que es el que fallaba ------------------------- */
-console.log("La captura de 0.2.13 (el caso que NO se arregló):");
+console.log("La captura de 0.2.14 (el formato limpio, con DOS llamadas de glob):");
+{
+  const r = E(CAPTURA_0_2_14);
+  const patrones = r.toolCalls.map((t) => JSON.parse(t.function.arguments).pattern);
+  check(
+    "saca las dos llamadas",
+    r.toolCalls.length === 2 &&
+      r.toolCalls.every((t) => t.function.name === "glob") &&
+      patrones[0] === "C:/Users/Usuario/Desktop/*" &&
+      patrones[1] === "C:/Users/Usuario/Desktop/**/index.html",
+    `${r.toolCalls.length} → ${JSON.stringify(patrones)}`,
+  );
+  check("y no queda rastro del XML", !r.contentLimpio.includes("invoke"), JSON.stringify(r.contentLimpio));
+}
+
+console.log("\nLa captura de 0.2.13 (el caso que NO se arregló):");
 for (const [nombre, texto] of [
   ["literal de la pantalla", CAPTURA_0_2_13],
   ["sin caracteres invisibles", CAPTURA_SIN_INVISIBLES],
@@ -74,5 +95,37 @@ check("JSON roto dentro del bloque no inventa llamadas", roto.toolCalls.length =
 const sinNombre = E("<tool_call><invoke name\n></invoke></tool_call>");
 check("invoke sin nombre no genera llamada", sinNombre.toolCalls.length === 0);
 
+/* --- SSE con trozos de relleno: no pueden pisar lo que sale del texto ------- */
+console.log("\nEl SSE de Zen antes de mirar el texto:");
+const relleno = [
+  "data: " + JSON.stringify({ choices: [{ delta: { content: "hola" } }] }),
+  "data: " + JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_x" }] } }] }),
+  "data: " + JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: "{}" } }] } }] }),
+  "data: [DONE]",
+].join("\n\n");
+const p = partesDelSse(relleno);
+check(
+  "un tool_call sin nombre no cuenta como tool_call",
+  p.toolCalls.length === 0,
+  JSON.stringify(p.toolCalls),
+);
+check("y el texto del stream se conserva", p.content === "hola", JSON.stringify(p.content));
+
+const bueno = [
+  "data: " + JSON.stringify({ choices: [{ delta: { content: "voy" } }] }),
+  "data: " + JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "glob" } }] } }] }),
+  "data: " + JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: '{"pattern":"x"}' } }] } }] }),
+  "data: [DONE]",
+].join("\n\n");
+const p2 = partesDelSse(bueno);
+check(
+  "uno con nombre y sus argumentos sí se guarda",
+  p2.toolCalls.length === 1 &&
+    p2.toolCalls[0].function.name === "glob" &&
+    p2.toolCalls[0].function.arguments === '{"pattern":"x"}',
+  JSON.stringify(p2.toolCalls),
+);
+
 console.log(fallos ? `\n❌ ${fallos} fallo(s)` : "\n✅ todos los formatos se convierten en tool calls reales");
+
 process.exit(fallos ? 1 : 0);
