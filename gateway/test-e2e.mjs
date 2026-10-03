@@ -63,7 +63,11 @@ const mock = createServer((req, res) => {
 await new Promise((r) => mock.listen(PUERTO_MOCK, r));
 
 /* ---- el gateway de verdad ---------------------------------------------- */
-const gw = spawn(process.execPath, [join(HERE, "server.mjs"), String(PUERTO_GW)], {
+/* Se puede apuntar a OTRO server.mjs con JPCODE_SERVER. Sirve para probar el
+   que queda instalado en node_modules, que no es el mismo fichero que el de
+   aquí: es el minificado y el que de verdad ve la gente. */
+const SERVIDOR = process.env.JPCODE_SERVER || join(HERE, "server.mjs");
+const gw = spawn(process.execPath, [SERVIDOR, String(PUERTO_GW)], {
   env: {
     ...process.env,
     OPENCODE_BASE: `http://127.0.0.1:${PUERTO_MOCK}`,
@@ -90,7 +94,9 @@ async function esperarArranque() {
 const limpiar = () => { try { gw.kill(); } catch {} mock.close(); };
 process.on("exit", limpiar);
 
-console.log(`\nProbando el gateway de verdad por HTTP (upstream mock en ${PUERTO_MOCK}):`);
+console.log(`\nProbando el gateway de verdad por HTTP`);
+console.log(`  servidor: ${SERVIDOR}`);
+console.log(`  upstream: mock local en ${PUERTO_MOCK}\n`);
 
 if (!(await esperarArranque())) {
   console.log(`  ❌ el gateway no arrancó. stderr:\n${stderrGW}`);

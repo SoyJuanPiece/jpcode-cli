@@ -597,7 +597,11 @@ function extraerToolCallsDeTexto(content) {
     .replace(/<invoke[^>]*>[\s\S]*?<\/invoke>/g, "")
     .replace(/<\/?invoke[^>]*>/g, "")
     .replace(/<\/??\s*tool_call\s*>/g, "")
-    .trim();
+    .trim()
+    /* Los tokens del modelo dejan Corollary races y corchetes sueltos cuando se
+       corta a mitad. Se van del final para que lo último que se lea sea una
+       frase y no un pedazo de token. */
+    .replace(/[\s\[\]\{\}\\]+$/, "");
 
   /* Si había bloques de tool call y no se ha sacado ninguna, el formato es otro
      que no conocemos. Antes esto pasaba en silencio: el bloque desaparecía del
