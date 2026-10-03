@@ -95,7 +95,7 @@
  *
  *   node jpcode/patch-jpcode-render.mjs
  *
- * Idempotente y re-aplicable tras `bash vendor-engine.sh`. Rutas: QWEN_PKG.
+ * Idempotente y re-aplicable tras `bash vendor-engine.sh`. Rutas: JPCODE_ENGINE.
  *
  * ## Deshacer
  *
@@ -112,7 +112,10 @@ import { join } from "node:path";
 import { execSync } from "node:child_process";
 
 function paqueteQwen() {
-  if (process.env.QWEN_PKG) return process.env.QWEN_PKG;
+  /* JPCODE_ENGINE es el nombre propio; QWEN_PKG se sigue leyendo por si alguien
+     llama a estos parches a mano con el nombre viejo. */
+  const rutaMotor = process.env.JPCODE_ENGINE ?? process.env.QWEN_PKG;
+  if (rutaMotor) return rutaMotor;
   const candidatos = [];
   try {
     candidatos.push(execSync("npm root -g", { encoding: "utf8" }).trim());
@@ -126,7 +129,7 @@ function paqueteQwen() {
     const p = join(base, "@qwen-code/qwen-code");
     if (existsSync(join(p, "package.json"))) return p;
   }
-  throw new Error("No encuentro @qwen-code/qwen-code. Pasa QWEN_PKG=/ruta/al/paquete");
+  throw new Error("No encuentro @qwen-code/qwen-code. Pasa JPCODE_ENGINE=/ruta/al/paquete");
 }
 
 const PKG = paqueteQwen();

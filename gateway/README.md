@@ -283,7 +283,7 @@ no es interactivo por defecto** — `qwen "prompt"` es one-shot y `-i` abre el i
 
 ### La config
 
-`qwen-settings.json` (se instala en `~/.qwen/settings.json`) declara los modelos vía
+`jpcode-settings.json` (se instala en `~/.qwen/settings.json`) declara los modelos vía
 `modelProviders`, con `baseUrl` apuntando al gateway y `envKey: OPENCODE_GATEWAY_KEY`:
 
 ```json
@@ -312,7 +312,7 @@ Tres cosas que cuestan un rato averiguar:
 ### Conectar proveedores: `/connect` y `/provider` (el «Connect a provider» de OpenCode)
 
 Qwen trae el flujo de conexión de serie con **tres alias**: `/auth`, `/connect` y `/login`. Con
-`patch-qwen-connect.mjs` además:
+`patch-jpcode-connect.mjs` además:
 
 ```
 /connect   (o /provider)  →  catálogo completo con buscador  →  eliges empresa
@@ -328,7 +328,7 @@ sigue existiendo como **`/providers`**.
 otro parche:
 
 ```bash
-node opencode-chat/patch-qwen-providers.mjs   # inyecta 202 proveedores de models.dev en el catálogo
+node opencode-chat/patch-jpcode-providers.mjs   # inyecta 202 proveedores de models.dev en el catálogo
 ```
 
 Parchea el array `ALL_PROVIDERS` del chunk instalado y añade cada proveedor con su `baseUrl`,
@@ -350,12 +350,12 @@ re-aplicable tras `qwen update` (lo hace `install-claude.sh`); además **refresc
 **Con 200+ proveedores, esa lista es inmanejable sin buscador** (Qwen no lo trae). Segundo parche:
 
 ```bash
-node opencode-chat/patch-qwen-auth.mjs      # buscador en el diálogo de conexión
-node opencode-chat/patch-qwen-connect.mjs   # /provider como alias + abrir directo en el catálogo
-node opencode-chat/patch-qwen-discover.mjs  # tu propia API key: detecta los modelos solos
+node opencode-chat/patch-jpcode-auth.mjs      # buscador en el diálogo de conexión
+node opencode-chat/patch-jpcode-connect.mjs   # /provider como alias + abrir directo en el catálogo
+node opencode-chat/patch-jpcode-discover.mjs  # tu propia API key: detecta los modelos solos
 ```
 
-`patch-qwen-auth.mjs` mete un filtro por texto en el diálogo, igual que `patch-qwen-search.mjs` hace
+`patch-jpcode-auth.mjs` mete un filtro por texto en el diálogo, igual que `patch-jpcode-search.mjs` hace
 con `/model`:
 
 ```
@@ -371,7 +371,7 @@ Escribe para filtrar (mira nombre, etiqueta, valor **y descripción**, así vale
 comprueba antes que `key.meta`**, porque el terminal manda Esc a veces como `meta` y si no, no
 vuelve atrás.
 
-`patch-qwen-connect.mjs` cierra el círculo: añade `provider` a los alias del diálogo, hace que
+`patch-jpcode-connect.mjs` cierra el círculo: añade `provider` a los alias del diálogo, hace que
 abra ya en el catálogo (`viewLevel` inicial `thirdparty-select`) y retitula esa pantalla. Necesita
 los otros dos (catálogo + buscador) para tener algo que buscar.
 
@@ -390,11 +390,11 @@ el Custom Provider no aparecía en la lista del catálogo.
 Dos arreglos:
 
 ```bash
-node opencode-chat/patch-qwen-connect.mjs    # lo mete en la lista del catálogo (/provider)
-node opencode-chat/patch-qwen-discover.mjs   # activa la detección automática de modelos
+node opencode-chat/patch-jpcode-connect.mjs    # lo mete en la lista del catálogo (/provider)
+node opencode-chat/patch-jpcode-discover.mjs   # activa la detección automática de modelos
 ```
 
-`patch-qwen-discover.mjs` añade `supportsModelDiscovery:true` al proveedor. Con eso el paso de
+`patch-jpcode-discover.mjs` añade `supportsModelDiscovery:true` al proveedor. Con eso el paso de
 modelos pasa a ser `DiscoveringModelIdsStep`, que hace `GET {baseUrl}/models` con
 `Authorization: Bearer {apiKey}` y pinta la lista para marcarla con `Space` (el buscador filtra).
 Si la petición falla, cae a la lista estática del proveedor, así que no empeora nada. Por eso
@@ -435,13 +435,13 @@ A diferencia de OpenCode, Qwen Code **no lee models.dev**: su `/model` es una li
 filtra). Dos arreglos:
 
 ```bash
-node opencode-chat/sync-qwen-models.mjs      --repo   # /model: Zen + los proveedores conectados
-node opencode-chat/patch-qwen-search.mjs              # buscador en el selector /model
-node opencode-chat/patch-qwen-model-sections.mjs      # dos niveles: proveedor → modelos
-node opencode-chat/patch-qwen-discover.mjs            # Custom Provider: detecta los modelos
+node opencode-chat/sync-jpcode-models.mjs      --repo   # /model: Zen + los proveedores conectados
+node opencode-chat/patch-jpcode-search.mjs              # buscador en el selector /model
+node opencode-chat/patch-jpcode-model-sections.mjs      # dos niveles: proveedor → modelos
+node opencode-chat/patch-jpcode-discover.mjs            # Custom Provider: detecta los modelos
 ```
 
-**1. `sync-qwen-models.mjs`** — escribe en `modelProviders` (clave propia `opencode-zen`) **los
+**1. `sync-jpcode-models.mjs`** — escribe en `modelProviders` (clave propia `opencode-zen`) **los
 gratis de Zen y los modelos de los proveedores conectados al gateway**, cada uno etiquetado
 **«Modelo · Proveedor»** como en OpenCode (`Grok 4.7 · OpenCode Zen`, `GLM-5 · OpenCode Go`) y los
 gratis marcados con `Gratis, sin cuenta`. **No borra** los proveedores que hayas añadido con
@@ -456,11 +456,11 @@ El envoltorio `opencode-chat/qwen` lanza este sync **en cada arranque** (si el g
 así que lo que conectes aparece en `/model` sin tocar nada. `OPENCODE_SYNC_MODELS=0` lo desactiva.
 
 ```bash
-qwen-modelos.mjs            # ver el catálogo del gateway (Zen primero, luego por proveedor)
-qwen-modelos.mjs grok       # filtrar por texto
+jpcode-modelos.mjs            # ver el catálogo del gateway (Zen primero, luego por proveedor)
+jpcode-modelos.mjs grok       # filtrar por texto
 ```
 
-**2. `patch-qwen-search.mjs`** — Qwen viene minificado en chunks, así que esto parchea los JS
+**2. `patch-jpcode-search.mjs`** — Qwen viene minificado en chunks, así que esto parchea los JS
 instalados para que el diálogo `/model` tenga filtro:
 
 ```
@@ -471,7 +471,7 @@ instalados para que el diálogo `/model` tenga filtro:
 │ Enter to select, ↑↓ to navigate, Esc to close                                    │
 ```
 
-**3. `patch-qwen-model-sections.mjs`** — con 150+ modelos, una lista plana no hay quien la use.
+**3. `patch-jpcode-model-sections.mjs`** — con 150+ modelos, una lista plana no hay quien la use.
 Esto la parte en dos pantallas, como OpenCode: **primero los proveedores** (con cuántos modelos
 tiene cada uno) y al elegir uno, **solo sus modelos**:
 
@@ -493,14 +493,14 @@ tiene cada uno) y al elegir uno, **solo sus modelos**:
 pantalla en la que estés. El proveedor de cada modelo se deduce del nombre que escribe el sync
 («Modelo · Proveedor», por el extremo que más se repite), luego del `envKey` legible
 (`GOOGLE_API_KEY` → «Google») y, si no hay nada de eso, del host de su `baseUrl`. Va **después** de
-`patch-qwen-search.mjs` (reescribe lo que ese deja) y también es idempotente.
+`patch-jpcode-search.mjs` (reescribe lo que ese deja) y también es idempotente.
 
 Es **idempotente y re-aplicable**: `qwen update` reemplaza los chunks, así que hay que volver a
 lanzarlo (lo hace `install-claude.sh`). Toca tres sitios: el diálogo (estado + captura de teclas +
 filtro), `DescriptiveRadioButtonSelect` y `BaseSelectionList` (para propagar `disableVimNav`, y
 que `j`/`k` no muevan la lista mientras escribes).
 
-**4. Los comandos de texto** (`qwen-commands/*.md` → `~/.qwen/commands/`): **`/providers`** lista
+**4. Los comandos de texto** (`jpcode-commands/*.md` → `~/.qwen/commands/`): **`/providers`** lista
 los proveedores con su estado de conexión y **`/modelos`** el catálogo de modelos agrupado;
 los dos aceptan un texto como filtro (`/providers models deepinfra`, `/modelos grok`) y `/modelos sync`
 regenera los ajustes. Para lo interactivo, `/connect` y `/provider`.
@@ -516,12 +516,12 @@ Tres cosas que costaron un rato y conviene tener escritas:
   pero lo pasa **escapado como un único token** (`'models deepinfra'`), y el CLI lo lee como un solo
   argumento. `$ARGUMENTS` se sustituye en crudo y llega bien. Los dos comandos usan `$ARGUMENTS`.
 > El `!{…}` muestra diálogo de confirmación; con `approvalMode: "default"` + `permissions.allow`
-> (lo que escribe `sync-qwen-models.mjs`) corre sin preguntar. Verificado: `/providers`,
+> (lo que escribe `sync-jpcode-models.mjs`) corre sin preguntar. Verificado: `/providers`,
 > `/providers models deepinfra` (72 modelos) y `/modelos mimo`.
 - **El permiso de shell y los modos.** Con `tools.approvalMode: "auto"` (por defecto) manda el
   clasificador y `permissions.allow` **no basta**; además aquí el clasificador está caído y siempre
   pregunta. Con `tools.approvalMode: "default"` sí se respeta `permissions.allow`, así que
-  `sync-qwen-models.mjs` escribe `permissions.allow: ["Bash(node *)"]` para que los comandos
+  `sync-jpcode-models.mjs` escribe `permissions.allow: ["Bash(node *)"]` para que los comandos
   propios corran sin preguntar (el resto sigue preguntando).
 
 > Detalle que ahorra tiempo: la etiqueta `[openai]` del selector es el **authType**, no el
@@ -810,7 +810,7 @@ node test.mjs     # 227 comprobaciones, sin navegador y sin gastar cuota
    `claude-*`), y que la key no aparece ni en el HTML ni en `app.js` ni en `/api/status`.
 2. **`app.js` con un DOM simulado**: init, catálogo, buscador, streaming, markdown, error 403,
    respuesta vacía, estado sin key, tema y sonda.
-3. **La lista de modelos de Qwen** (`sync-qwen-models.mjs`) contra un gateway falso: Zen primero,
+3. **La lista de modelos de Qwen** (`sync-jpcode-models.mjs`) contra un gateway falso: Zen primero,
    los proveedores agrupados y ordenados, el nombre etiquetado, `envKey` en vez de clave y que se
    respeten los ajustes previos.
 

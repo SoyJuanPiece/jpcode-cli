@@ -2,14 +2,14 @@
 /**
  * Añade un buscador al diálogo `/auth` (el de `/connect` y `/provider`) de Qwen Code.
  *
- * Con el parche de proveedores (patch-qwen-providers.mjs) la lista de
+ * Con el parche de proveedores (patch-jpcode-providers.mjs) la lista de
  * «Third-party Providers» pasa a tener ~200 entradas, y Qwen no trae buscador
  * nativo: hay que bajar a mano con las flechas. Este parche mete un filtro por
- * texto en ese diálogo, igual que patch-qwen-search.mjs hace con `/model`.
+ * texto en ese diálogo, igual que patch-jpcode-search.mjs hace con `/model`.
  *
- *   node opencode-chat/patch-qwen-auth.mjs
+ *   node opencode-chat/patch-jpcode-auth.mjs
  *
- * Requiere que patch-qwen-search.mjs esté aplicado (usa el prop `disableVimNav`
+ * Requiere que patch-jpcode-search.mjs esté aplicado (usa el prop `disableVimNav`
  * que ese parche añade a DescriptiveRadioButtonSelect/BaseSelectionList).
  *
  * Qué toca (AuthDialog en startInteractiveUI-*.js):
@@ -31,7 +31,10 @@ import { execSync } from "node:child_process";
 
 /* ---------- localizar el paquete de Qwen Code ---------- */
 function paqueteQwen() {
-  if (process.env.QWEN_PKG) return process.env.QWEN_PKG;
+  /* JPCODE_ENGINE es el nombre propio; QWEN_PKG se sigue leyendo por si alguien
+     llama a estos parches a mano con el nombre viejo. */
+  const rutaMotor = process.env.JPCODE_ENGINE ?? process.env.QWEN_PKG;
+  if (rutaMotor) return rutaMotor;
   const candidatos = [];
   try {
     candidatos.push(execSync("npm root -g", { encoding: "utf8" }).trim());

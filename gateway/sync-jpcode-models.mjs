@@ -9,11 +9,11 @@
  * `/auth` los gestiona Qwen él mismo y **no se tocan**: aquí se fusiona, nunca
  * se borra lo que ya hubiera.
  *
- *     node opencode-chat/sync-qwen-models.mjs           # Zen + los proveedores conectados (como OpenCode)
- *     node opencode-chat/sync-qwen-models.mjs --zen     # solo los gratis de Zen
- *     OPENCODE_ZEN_PLAN=1 node opencode-chat/sync-qwen-models.mjs   # + el catálogo de pago de Zen
- *     node opencode-chat/sync-qwen-models.mjs --print   # ver el resultado sin escribir
- *     node opencode-chat/sync-qwen-models.mjs --repo    # copia también a qwen-settings.json
+ *     node opencode-chat/sync-jpcode-models.mjs           # Zen + los proveedores conectados (como OpenCode)
+ *     node opencode-chat/sync-jpcode-models.mjs --zen     # solo los gratis de Zen
+ *     OPENCODE_ZEN_PLAN=1 node opencode-chat/sync-jpcode-models.mjs   # + el catálogo de pago de Zen
+ *     node opencode-chat/sync-jpcode-models.mjs --print   # ver el resultado sin escribir
+ *     node opencode-chat/sync-jpcode-models.mjs --repo    # copia también a jpcode-settings.json
  *
  * Cada modelo se etiqueta como en OpenCode: «Modelo · Proveedor». Por defecto
  * entran los gratis de Zen y los modelos de los proveedores conectados al
@@ -176,8 +176,8 @@ if (process.argv.includes("--print")) {
   if (ajenos) console.log(`   (conservo ${ajenos} proveedor(es) que tenías de /auth)`);
   if (soloZen) console.log("   modo --zen: solo los gratis de Zen");
   if (process.argv.includes("--repo")) {
-    writeFileSync(join(AQUI, "qwen-settings.json"), json);
-    console.log(`✅ copia del repo → ${join(AQUI, "qwen-settings.json")}`);
+    writeFileSync(join(AQUI, "jpcode-settings.json"), json);
+    console.log(`✅ copia del repo → ${join(AQUI, "jpcode-settings.json")}`);
   }
   console.log("   `/model` para cambiarlo · `/connect` (o `/provider`) para conectar más proveedores.");
 }

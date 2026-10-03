@@ -37,13 +37,13 @@ fi
 
 # Config de Qwen Code: modelProviders apuntando al gateway. No se guardan claves
 # (cada modelo declara envKey y el valor lo pone el envoltorio en el entorno).
-if [ -f "$AQUI/qwen-settings.json" ]; then
+if [ -f "$AQUI/jpcode-settings.json" ]; then
   QAJUSTES="${HOME}/.qwen/settings.json"
   if [ -f "$QAJUSTES" ]; then
-    echo "   ~/.qwen/settings.json ya existe (no lo toco); el modelo de referencia está en $AQUI/qwen-settings.json"
+    echo "   ~/.qwen/settings.json ya existe (no lo toco); el modelo de referencia está en $AQUI/jpcode-settings.json"
   else
     mkdir -p "$(dirname "$QAJUSTES")"
-    install -m 644 "$AQUI/qwen-settings.json" "$QAJUSTES"
+    install -m 644 "$AQUI/jpcode-settings.json" "$QAJUSTES"
     echo "✅ config de Qwen Code: ~/.qwen/settings.json"
   fi
 fi
@@ -54,48 +54,48 @@ mkdir -p "${HOME}/.qwen/commands"
 # Restos de versiones anteriores: `/provider` (texto) ahora es el diálogo de
 # /connect, así que la lista de texto se llama /providers.
 rm -f "${HOME}/.qwen/commands/provider.md"
-for md in "$AQUI"/qwen-commands/*.md; do
+for md in "$AQUI"/jpcode-commands/*.md; do
   [ -f "$md" ] || continue
   sed "s#__CHAT_DIR__#$AQUI#g" "$md" > "${HOME}/.qwen/commands/$(basename "$md")"
   echo "✅ comando de Qwen: /$(basename "$md" .md)"
 done
 
 # Buscador en el selector /model (parchea el CLI instalado; re-aplicar tras qwen update).
-if [ -f "$AQUI/patch-qwen-search.mjs" ] && command -v qwen >/dev/null 2>&1; then
-  node "$AQUI/patch-qwen-search.mjs" || true
+if [ -f "$AQUI/patch-jpcode-search.mjs" ] && command -v qwen >/dev/null 2>&1; then
+  node "$AQUI/patch-jpcode-search.mjs" || true
 fi
 
 # Catálogo de models.dev dentro de la lista nativa de /auth → Third-party.
-if [ -f "$AQUI/patch-qwen-providers.mjs" ] && command -v qwen >/dev/null 2>&1; then
-  node "$AQUI/patch-qwen-providers.mjs" || true
+if [ -f "$AQUI/patch-jpcode-providers.mjs" ] && command -v qwen >/dev/null 2>&1; then
+  node "$AQUI/patch-jpcode-providers.mjs" || true
 fi
 
 # Buscador en esa lista de /auth (depende del parche de /model de arriba).
-if [ -f "$AQUI/patch-qwen-auth.mjs" ] && command -v qwen >/dev/null 2>&1; then
-  node "$AQUI/patch-qwen-auth.mjs" || true
+if [ -f "$AQUI/patch-jpcode-auth.mjs" ] && command -v qwen >/dev/null 2>&1; then
+  node "$AQUI/patch-jpcode-auth.mjs" || true
 fi
 
 # `/connect` y `/provider` abren el catálogo con buscador en un solo paso.
-if [ -f "$AQUI/patch-qwen-connect.mjs" ] && command -v qwen >/dev/null 2>&1; then
-  node "$AQUI/patch-qwen-connect.mjs" || true
+if [ -f "$AQUI/patch-jpcode-connect.mjs" ] && command -v qwen >/dev/null 2>&1; then
+  node "$AQUI/patch-jpcode-connect.mjs" || true
 fi
 
 # `/model` en dos niveles (proveedor → modelos). Va después del buscador.
-if [ -f "$AQUI/patch-qwen-model-sections.mjs" ] && command -v qwen >/dev/null 2>&1; then
-  node "$AQUI/patch-qwen-model-sections.mjs" || true
+if [ -f "$AQUI/patch-jpcode-model-sections.mjs" ] && command -v qwen >/dev/null 2>&1; then
+  node "$AQUI/patch-jpcode-model-sections.mjs" || true
 fi
 
 # Custom Provider: detecta los modelos al pegar la clave (GET {baseUrl}/models).
-if [ -f "$AQUI/patch-qwen-discover.mjs" ] && command -v qwen >/dev/null 2>&1; then
-  node "$AQUI/patch-qwen-discover.mjs" || true
+if [ -f "$AQUI/patch-jpcode-discover.mjs" ] && command -v qwen >/dev/null 2>&1; then
+  node "$AQUI/patch-jpcode-discover.mjs" || true
 fi
 
 # Rellenar la lista de modelos desde el gateway, si el proxy está levantado.
-if [ -f "$AQUI/sync-qwen-models.mjs" ]; then
-  if node "$AQUI/sync-qwen-models.mjs" >/dev/null 2>&1; then
+if [ -f "$AQUI/sync-jpcode-models.mjs" ]; then
+  if node "$AQUI/sync-jpcode-models.mjs" >/dev/null 2>&1; then
     echo "✅ lista de modelos de Qwen rellenada desde el gateway"
   else
-    echo "   (el gateway no responde; cuando esté: node $AQUI/sync-qwen-models.mjs)"
+    echo "   (el gateway no responde; cuando esté: node $AQUI/sync-jpcode-models.mjs)"
   fi
 fi
 

@@ -7,7 +7,7 @@
  * **re-aplicable**: después de `qwen update` (que reemplaza los chunks) hay que
  * volver a lanzarlo:
  *
- *     node opencode-chat/patch-qwen-search.mjs
+ *     node opencode-chat/patch-jpcode-search.mjs
  *
  * Qué hace:
  *   1. En el diálogo «Select Model»: añade un estado de consulta, captura las
@@ -24,7 +24,10 @@ import { execSync } from "node:child_process";
 
 /* ---------- localizar el paquete de Qwen Code ---------- */
 function paqueteQwen() {
-  if (process.env.QWEN_PKG) return process.env.QWEN_PKG;
+  /* JPCODE_ENGINE es el nombre propio; QWEN_PKG se sigue leyendo por si alguien
+     llama a estos parches a mano con el nombre viejo. */
+  const rutaMotor = process.env.JPCODE_ENGINE ?? process.env.QWEN_PKG;
+  if (rutaMotor) return rutaMotor;
   const candidatos = [];
   try {
     candidatos.push(execSync("npm root -g", { encoding: "utf8" }).trim());

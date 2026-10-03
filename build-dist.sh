@@ -47,11 +47,11 @@ if [ ! -f "$AQUI/engine/cli-entry.js" ]; then
   bash "$AQUI/vendor-engine.sh" >/dev/null || { echo "✗ no pude traer el motor" >&2; exit 1; }
 else
   echo "→ actualizando parches sobre el motor en engine/…"
-  for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render patch-jpcode-vision; do
-    QWEN_PKG="$AQUI/engine" node "$AQUI/$p.mjs" >/dev/null 2>&1 || true
+  for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render patch-jpcode-vision patch-jpcode-aesthetics; do
+    JPCODE_ENGINE="$AQUI/engine" node "$AQUI/$p.mjs" >/dev/null 2>&1 || true
   done
-  for p in patch-qwen-search patch-qwen-providers patch-qwen-auth patch-qwen-connect patch-qwen-model-sections patch-qwen-discover; do
-    QWEN_PKG="$AQUI/engine" node "$AQUI/gateway/$p.mjs" >/dev/null 2>&1 || true
+  for p in patch-jpcode-search patch-jpcode-providers patch-jpcode-auth patch-jpcode-connect patch-jpcode-model-sections patch-jpcode-discover; do
+    JPCODE_ENGINE="$AQUI/engine" node "$AQUI/gateway/$p.mjs" >/dev/null 2>&1 || true
   done
 fi
 tar -cf - -C "$AQUI" engine | tar -xf - -C "$TRABAJO"

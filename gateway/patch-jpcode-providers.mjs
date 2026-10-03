@@ -8,7 +8,7 @@
  * forma que `/auth` → Third-party Providers muestre todos, con su baseUrl y su
  * variable de entorno (envKey) para pegar la API key.
  *
- *     node opencode-chat/patch-qwen-providers.mjs
+ *     node opencode-chat/patch-jpcode-providers.mjs
  *
  * Es idempotente y re-aplicable: tras `qwen update` (que reemplaza los chunks)
  * hay que volver a lanzarlo. El catálogo se lee de models.dev a través de los
@@ -32,7 +32,10 @@ const { catalogo, config, baseURL, protocoloDe, NO_SOPORTADOS, esModeloGratis } 
 
 /* ---------- paquete de Qwen ---------- */
 function paqueteQwen() {
-  if (process.env.QWEN_PKG) return process.env.QWEN_PKG;
+  /* JPCODE_ENGINE es el nombre propio; QWEN_PKG se sigue leyendo por si alguien
+     llama a estos parches a mano con el nombre viejo. */
+  const rutaMotor = process.env.JPCODE_ENGINE ?? process.env.QWEN_PKG;
+  if (rutaMotor) return rutaMotor;
   const bases = [];
   try { bases.push(execSync("npm root -g", { encoding: "utf8" }).trim()); } catch { /* sin npm */ }
   bases.push(

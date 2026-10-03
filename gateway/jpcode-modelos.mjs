@@ -4,10 +4,10 @@
  * proveedor, con el estado de conexión de cada uno — el equivalente de lo que
  * OpenCode muestra en su lista de modelos.
  *
- *   node qwen-modelos.mjs                 # todo, Zen gratis primero y luego los conectados
- *   node qwen-modelos.mjs grok            # solo lo que case con "grok" (buscador)
- *   node qwen-modelos.mjs --count         # solo los totales
- *   node qwen-modelos.mjs sync            # regenera ~/.qwen/settings.json
+ *   node jpcode-modelos.mjs                 # todo, Zen gratis primero y luego los conectados
+ *   node jpcode-modelos.mjs grok            # solo lo que case con "grok" (buscador)
+ *   node jpcode-modelos.mjs --count         # solo los totales
+ *   node jpcode-modelos.mjs sync            # regenera ~/.qwen/settings.json
  *
  * Habla con los módulos directamente: funciona aunque el servidor no esté arriba.
  */
@@ -39,7 +39,7 @@ const filtro = args.find((a) => a !== "--count" && a !== "sync") || "";
 /* El comando `sync` delega en el generador de ajustes. */
 if (args.includes("sync")) {
   const { spawnSync } = await import("node:child_process");
-  const r = spawnSync(process.execPath, [join(HERE, "sync-qwen-models.mjs"), "--repo"], { stdio: "inherit" });
+  const r = spawnSync(process.execPath, [join(HERE, "sync-jpcode-models.mjs"), "--repo"], { stdio: "inherit" });
   process.exit(r.status ?? 0);
 }
 

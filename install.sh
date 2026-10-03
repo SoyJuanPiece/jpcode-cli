@@ -50,16 +50,16 @@ if [ ! -f "$JP_HOME/settings.json" ] && [ -f "$QWEN_LEGACY/settings.json" ]; the
   cp -r "$QWEN_LEGACY/." "$JP_HOME/"
   echo "✅ config heredada de $QWEN_LEGACY → $JP_HOME"
 fi
-if [ ! -f "$JP_HOME/settings.json" ] && [ -f "$AQUI/gateway/qwen-settings.json" ]; then
+if [ ! -f "$JP_HOME/settings.json" ] && [ -f "$AQUI/gateway/jpcode-settings.json" ]; then
   mkdir -p "$JP_HOME"
-  install -m 644 "$AQUI/gateway/qwen-settings.json" "$JP_HOME/settings.json"
+  install -m 644 "$AQUI/gateway/jpcode-settings.json" "$JP_HOME/settings.json"
   echo "✅ config inicial desde el gateway → $JP_HOME/settings.json"
 fi
 
 # 4) Comandos propios del CLI.
-if [ -d "$AQUI/gateway/qwen-commands" ]; then
+if [ -d "$AQUI/gateway/jpcode-commands" ]; then
   mkdir -p "$JP_HOME/commands"
-  for md in "$AQUI"/gateway/qwen-commands/*.md; do
+  for md in "$AQUI"/gateway/jpcode-commands/*.md; do
     [ -f "$md" ] || continue
     cp "$md" "$JP_HOME/commands/$(basename "$md")"
   done

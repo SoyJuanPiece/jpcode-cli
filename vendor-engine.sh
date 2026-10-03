@@ -60,23 +60,23 @@ echo "→ aplicando los parches de jpcode sobre el motor (en el build, no al ins
 FALLADOS=""
 for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render; do
   if [ -f "$AQUI/$p.mjs" ]; then
-    if ! QWEN_PKG="$MOTOR" node "$AQUI/$p.mjs" >/dev/null 2>&1; then
+    if ! JPCODE_ENGINE="$MOTOR" node "$AQUI/$p.mjs" >/dev/null 2>&1; then
       FALLADOS="$FALLADOS $p"
     fi
   fi
 done
 # Los parches de comportamiento (catálogo de models.dev, /model por proveedores,
 # Custom Provider) viven en el gateway y son los mismos que aplica install.sh.
-for p in patch-qwen-search patch-qwen-providers patch-qwen-auth patch-qwen-connect patch-qwen-model-sections patch-qwen-discover; do
+for p in patch-jpcode-search patch-jpcode-providers patch-jpcode-auth patch-jpcode-connect patch-jpcode-model-sections patch-jpcode-discover; do
   if [ -f "$AQUI/gateway/$p.mjs" ]; then
-    if ! QWEN_PKG="$MOTOR" node "$AQUI/gateway/$p.mjs" >/dev/null 2>&1; then
+    if ! JPCODE_ENGINE="$MOTOR" node "$AQUI/gateway/$p.mjs" >/dev/null 2>&1; then
       FALLADOS="$FALLADOS $p"
     fi
   fi
 done
 if [ -n "$FALLADOS" ]; then
   echo "⚠️  parches que fallaron sobre el motor:$FALLADOS" >&2
-  echo "    para ver el error:  QWEN_PKG=$MOTOR node <parche>.mjs" >&2
+  echo "    para ver el error:  JPCODE_ENGINE=$MOTOR node <parche>.mjs" >&2
   exit 1
 fi
 echo "   los 10 parches, aplicados"
@@ -108,12 +108,12 @@ repositorio, y se pueden reproducir con \`bash vendor-engine.sh\`:
 | \`patch-jpcode-clipboard\` | Sustituye el aviso de pegado de imágenes por uno veraz. |
 | \`patch-jpcode-image-watch\` | Añade el vigilante que adjunta la imagen que llega del puente. |
 | \`patch-jpcode-render\` | Render de ink: deja el renderizador incremental **apagado por defecto** y le añade una guarda de desplazamiento. El incremental escribe 7-10 veces menos (el parpadeo en los terminales web viene de repintar la pantalla 12 veces por segundo), pero cuando el chat crece más que la ventana se rompe la pantalla, así que solo se activa a mano con \`JPCODE_INCREMENTAL_RENDER=1\`. |
-| \`patch-qwen-search\` | Buscador en /model. |
-| \`patch-qwen-providers\` | Catálogo completo de models.dev en el diálogo de conexión. |
-| \`patch-qwen-auth\` | Buscador en el diálogo de conexión. |
-| \`patch-qwen-connect\` | \`/provider\` como alias, abriendo directo en el catálogo. |
-| \`patch-qwen-model-sections\` | /model en dos niveles (proveedor → modelos). |
-| \`patch-qwen-discover\` | Detección automática de modelos del proveedor propio. |
+| \`patch-jpcode-search\` | Buscador en /model. |
+| \`patch-jpcode-providers\` | Catálogo completo de models.dev en el diálogo de conexión. |
+| \`patch-jpcode-auth\` | Buscador en el diálogo de conexión. |
+| \`patch-jpcode-connect\` | \`/provider\` como alias, abriendo directo en el catálogo. |
+| \`patch-jpcode-model-sections\` | /model en dos niveles (proveedor → modelos). |
+| \`patch-jpcode-discover\` | Detección automática de modelos del proveedor propio. |
 
 ## Marcas
 

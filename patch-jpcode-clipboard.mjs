@@ -41,7 +41,10 @@ import { execSync } from "node:child_process";
 
 /* ---------- localizar el paquete de Qwen Code ---------- */
 function paqueteQwen() {
-  if (process.env.QWEN_PKG) return process.env.QWEN_PKG;
+  /* JPCODE_ENGINE es el nombre propio; QWEN_PKG se sigue leyendo por si alguien
+     llama a estos parches a mano con el nombre viejo. */
+  const rutaMotor = process.env.JPCODE_ENGINE ?? process.env.QWEN_PKG;
+  if (rutaMotor) return rutaMotor;
   const candidatos = [];
   try {
     candidatos.push(execSync("npm root -g", { encoding: "utf8" }).trim());

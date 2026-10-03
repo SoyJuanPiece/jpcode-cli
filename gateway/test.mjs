@@ -33,7 +33,7 @@ const SIN_CATALOGO = join(tmpdir(), "opencode-chat-test-sin-catalogo.json");
 
 /**
  * Entorno para los procesos hijos. El test NO debe heredar `QWEN_HOME` ni
- * `QWEN_SETTINGS` de quien lo lance: `sync-qwen-models.mjs` los respeta, así que
+ * `QWEN_SETTINGS` de quien lo lance: `sync-jpcode-models.mjs` los respeta, así que
  * heredarlos lo haría escribir en la configuración REAL del usuario en vez de en
  * el HOME temporal del test. (Y encima pasaría en verde o en rojo según el
  * entorno de quien lo ejecute.)
@@ -1055,7 +1055,7 @@ console.log("\n== lista de modelos de Qwen (sync-qwen-models) ==");
   // este mismo proceso, y el gateway falso (que vive aquí) nunca respondería.
   const correr = (extra = []) =>
     new Promise((res, rej) => {
-      execFile(process.execPath, [join(HERE, "sync-qwen-models.mjs"), ...extra], {
+      execFile(process.execPath, [join(HERE, "sync-jpcode-models.mjs"), ...extra], {
         env: entornoHijo({ HOME: qhome, OPENCODE_GATEWAY_URL: url, OPENCODE_GATEWAY_KEY: "k" }),
       }, (err) => (err ? rej(err) : res()));
     });
@@ -1101,7 +1101,7 @@ console.log("\n== lista de modelos de Qwen (sync-qwen-models) ==");
 
   // La variable de entorno vale igual que el flag (es lo que usa el envoltorio).
   await new Promise((res, rej) => {
-    execFile(process.execPath, [join(HERE, "sync-qwen-models.mjs")], {
+    execFile(process.execPath, [join(HERE, "sync-jpcode-models.mjs")], {
       env: entornoHijo({ HOME: qhome, OPENCODE_GATEWAY_URL: url, OPENCODE_GATEWAY_KEY: "k", OPENCODE_ZEN_PLAN: "1" }),
     }, (err) => (err ? rej(err) : res()));
   });

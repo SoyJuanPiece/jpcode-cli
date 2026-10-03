@@ -10,17 +10,17 @@
  *   1. `/provider` sea otro alias del diálogo de conexión (antes era un comando
  *      de texto; ese sigue existiendo como `/providers`).
  *   2. El diálogo abra DIRECTAMENTE en el catálogo de proveedores —con el
- *      buscador que añade patch-qwen-auth.mjs—, con Esc para volver al menú.
+ *      buscador que añade patch-jpcode-auth.mjs—, con Esc para volver al menú.
  *   3. El título de esa pantalla sea «Connect a Provider», como en OpenCode.
  *   4. El «Custom Provider» (el de pegar tu propia Base URL + API key) salga
  *      también en esa lista. Qwen lo deja en el menú principal y la lista de
  *      terceros solo filtra `uiGroup==="third-party"`, así que sin esto no se
  *      llega a él sin volver atrás con Esc.
  *
- *     node opencode-chat/patch-qwen-connect.mjs
+ *     node opencode-chat/patch-jpcode-connect.mjs
  *
  * Idempotente y re-aplicable tras `qwen update` (que reemplaza los chunks).
- * Requiere patch-qwen-providers.mjs (el catálogo) y patch-qwen-auth.mjs (el
+ * Requiere patch-jpcode-providers.mjs (el catálogo) y patch-jpcode-auth.mjs (el
  * buscador) para que la pantalla tenga contenido que buscar.
  *
  * Rutas: QWEN_PKG (por defecto, autodetección).
@@ -31,7 +31,10 @@ import { execSync } from "node:child_process";
 
 /* ---------- localizar el paquete de Qwen Code ---------- */
 function paqueteQwen() {
-  if (process.env.QWEN_PKG) return process.env.QWEN_PKG;
+  /* JPCODE_ENGINE es el nombre propio; QWEN_PKG se sigue leyendo por si alguien
+     llama a estos parches a mano con el nombre viejo. */
+  const rutaMotor = process.env.JPCODE_ENGINE ?? process.env.QWEN_PKG;
+  if (rutaMotor) return rutaMotor;
   const candidatos = [];
   try {
     candidatos.push(execSync("npm root -g", { encoding: "utf8" }).trim());

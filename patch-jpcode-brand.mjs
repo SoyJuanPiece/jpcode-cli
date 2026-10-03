@@ -25,7 +25,7 @@
  *   node patch-jpcode-brand.mjs
  *
  * Idempotente y re-aplicable tras re-vendorizar el motor (`bash vendor-engine.sh`
- * ya lo llama con QWEN_PKG=engine). NO toca marca de Anthropic ni código ajeno:
+ * ya lo llama con JPCODE_ENGINE=engine). NO toca marca de Anthropic ni código ajeno:
  * solo renombra y retoca la app que estamos re-marcando.
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
@@ -33,7 +33,10 @@ import { join } from "node:path";
 import { execSync } from "node:child_process";
 
 function paqueteQwen() {
-  if (process.env.QWEN_PKG) return process.env.QWEN_PKG;
+  /* JPCODE_ENGINE es el nombre propio; QWEN_PKG se sigue leyendo por si alguien
+     llama a estos parches a mano con el nombre viejo. */
+  const rutaMotor = process.env.JPCODE_ENGINE ?? process.env.QWEN_PKG;
+  if (rutaMotor) return rutaMotor;
   const candidatos = [];
   try {
     candidatos.push(execSync("npm root -g", { encoding: "utf8" }).trim());
@@ -47,7 +50,7 @@ function paqueteQwen() {
     const p = join(base, "@qwen-code/qwen-code");
     if (existsSync(join(p, "package.json"))) return p;
   }
-  throw new Error("No encuentro @qwen-code/qwen-code. Pasa QWEN_PKG=/ruta/al/paquete");
+  throw new Error("No encuentro @qwen-code/qwen-code. Pasa JPCODE_ENGINE=/ruta/al/paquete");
 }
 
 const PKG = paqueteQwen();
@@ -190,6 +193,149 @@ if (candidatoWarning) {
   aplicar(candidatoWarning, [
     ['disambiguationWarning=`Persisted model.baseUrl', 'disambiguationWarning=void 0;let _oldWarn=`Persisted model.baseUrl']
   ], "disambiguationWarning=void 0");
+}
+
+/* ---- barrido de la marca por todo el motor ----------------------------------
+ * Lo de arriba toca ocho ficheros, los que se eligieron a mano. Pero el motor
+ * tiene la marca repartida por casi todos: en 0.24.7 quedaban unas 250 apariciones
+ * de "Qwen Code" fuera de esos ocho, y casi todas se leen — la ayuda, las
+ * descripciones de /settings, los mensajes de error, el /about, la exportación
+ * de la transcripción. Una lista escrita a mano se queda corta en la siguiente
+ * actualización del motor, así que aquí se barre el directorio entero.
+ *
+ * Se sustituye solo la frase exacta "Qwen Code", nunca la palabra suelta "Qwen":
+ * el login contra la cuenta de Qwen, los modelos qwen3.5 y el paquete npm
+ * `@qwen-code/audio-capture` son de otro programa y seguir llamándose así es lo
+ * correcto. Por lo mismo `engine/package.json` no se toca (ahí el nombre es la
+ * clave de la que salen `sandboxImageUri` y los pines de optionalDependencies).
+ *
+ * Cada fichero se valida con node --check y se devuelve como estaba si el cambio
+ * lo dejara sin ser JavaScript. */
+const BARRIDO = "jpcode";
+
+function barrerMarca() {
+  /* Todos los .js del motor, no una lista: el mismo "Qwen Code" aparece en
+   * chunks/, en cli.js, en export-transcript-document.js y también en
+   * cli-entry.js y sandboxFileWorker.js, que seengingolpearon al principio. */
+  const objetivos = [];
+  const recorrer = (dir) => {
+    for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+      if (entrada.name === "node_modules" || entrada.name.startsWith(".")) continue;
+      const ruta = join(dir, entrada.name);
+      if (entrada.isDirectory()) recorrer(ruta);
+      else if (entrada.name.endsWith(".js")) objetivos.push(ruta);
+    }
+  };
+  recorrer(PKG);
+
+  let barridos = 0;
+  let repuestos = 0;
+  for (const ruta of objetivos) {
+    const antes = readFileSync(ruta, "utf8");
+    if (!antes.includes("Qwen Code")) continue;
+    const despues = antes.replaceAll("Qwen Code", BARRIDO);
+    writeFileSync(ruta, despues);
+    try {
+      execSync(`node --check "${ruta}"`, { stdio: ["ignore", "ignore", "pipe"] });
+    } catch {
+      writeFileSync(ruta, antes);
+      console.error(`  ⚠️  ${ruta.split("/").pop()}: el barrido rompe la sintaxis; revertido`);
+      process.exit(1);
+    }
+    repuestos += (antes.match(/Qwen Code/g) || []).length;
+    barridos++;
+  }
+  if (barridos) {
+    console.log(`• barrido: "Qwen Code" → ${BARRIDO} en ${barridos} fichero(s), ${repuestos} aparición(es)`);
+    cambios++;
+  } else {
+    console.log('• barrido: no queda ninguna aparición de "Qwen Code" en el motor');
+  }
+}
+
+/* ---- el español tiene que existir para el motor ---------------------------
+ * El motor trae sus locales empaquetados (de, en, fr, ja, pt, ru, zh, zh-TW), pero
+ * el catálogo de jpcode va aparte, en `~/.jpcode/locales/es.js`, y se instala con el
+ * postinstall. Ese fichero lo encuentra el motor… pero solo si el idioma está en
+ * `SUPPORTED_LANGUAGES` (chunk-MWABT6CH.js): es la lista blanca que decide qué se
+ * considera un idioma y cuál cae a inglés. Sin añadir `es` ahí, el catálogo se
+ * queda en el disco sin leer nunca.
+ *
+ * Por eso esta parte sí es un parche —tiene que reaplicarse en cada
+ * `vendor-engine.sh`— y lo otro no: el catálogo se regenera sin tocar el motor.
+ *
+ * El `strictParity` de los chinos avisa cuando el catálogo no cubre todas las
+ * claves; en español no hace falta porque `check-locale-es.mjs` lo verifica antes
+ * de publicar. */
+const IDIOMAS = "chunk-MWABT6CH.js";
+const ANCLA_IDIOMA = 'var SUPPORTED_LANGUAGES=[{code:"en"';
+const ESPANOL = '{code:"es",id:"es-ES",fullName:"Spanish",nativeName:"Español"},';
+
+const rutaIdiomas = join(chunks, IDIOMAS);
+if (!existsSync(rutaIdiomas)) {
+  console.error(`  ⚠️  no existe ${IDIOMAS}: el motor no trae la lista de idiomas`);
+  process.exit(1);
+} else {
+  const antesIdiomas = readFileSync(rutaIdiomas, "utf8");
+  if (antesIdiomas.includes(ESPANOL)) {
+    console.log("• español: ya está en la lista de idiomas del motor");
+  } else if (!antesIdiomas.includes(ANCLA_IDIOMA)) {
+    console.error(`  ⚠️  ${IDIOMAS}: no encuentro SUPPORTED_LANGUAGES (¿otra versión?)`);
+    process.exit(1);
+  } else {
+    const s = antesIdiomas.replace(ANCLA_IDIOMA, `var SUPPORTED_LANGUAGES=[${ESPANOL}{code:"en"`);
+    writeFileSync(rutaIdiomas, s);
+    try {
+      execSync(`node --check "${rutaIdiomas}"`, { stdio: ["ignore", "ignore", "pipe"] });
+    } catch {
+      writeFileSync(rutaIdiomas, antesIdiomas);
+      console.error(`  ⚠️  ${IDIOMAS}: el parche rompe la sintaxis; revertido`);
+      process.exit(1);
+    }
+    console.log("• español: añadido a la lista de idiomas del motor");
+    cambios++;
+  }
+}
+
+barrerMarca();
+
+/* ---- el directorio de configuración dentro de cada proyecto ----------------
+ * El home global ya era `~/.jpcode`: el envoltorio arranca el motor con
+ * `QWEN_HOME`. Pero `QWEN_DIR` seguía valiendo `.qwen`, y ese mismo valor lo usa el
+ * motor para la configuración **de cada proyecto**: `<proyecto>/.qwen/`.
+ *
+ * O sea que la mitad global era de jpcode y la de cada repositorio seguía siendo
+ * de otro programa — que es justo lo que se nota al hacer `ls -a` en un proyecto.
+ *
+ * Con las dos a `.jpcode` no se pisan: el global viene de `QWEN_HOME` y el de
+ * proyecto cuelga de la raíz del repo. Lo único que se deja atrás es el
+ * `<proyecto>/.qwen/` que alguien tuviera hecho a mano, que pasa a ignorarse; con
+ * moverlo a `<proyecto>/.jpcode/` sigue funcionando. */
+const QWEN_DIR = /var QWEN_DIR="\.qwen"/g;
+let qwenDirVistos = 0;
+for (const nombre of readdirSync(chunks)) {
+  if (!nombre.endsWith(".js")) continue;
+  const ruta = join(chunks, nombre);
+  const antes = readFileSync(ruta, "utf8");
+  QWEN_DIR.lastIndex = 0;
+  if (!QWEN_DIR.test(antes)) continue;
+  QWEN_DIR.lastIndex = 0;
+  const despues = antes.replace(QWEN_DIR, 'var QWEN_DIR=".jpcode"');
+  writeFileSync(ruta, despues);
+  try {
+    execSync(`node --check "${ruta}"`, { stdio: ["ignore", "ignore", "pipe"] });
+  } catch {
+    writeFileSync(ruta, antes);
+    console.error(`  ⚠️  ${nombre}: el cambio de QWEN_DIR rompe la sintaxis; revertido`);
+    process.exit(1);
+  }
+  qwenDirVistos++;
+}
+if (qwenDirVistos) {
+  console.log(`• QWEN_DIR: ".qwen" → ".jpcode" (${qwenDirVistos} fichero(s))`);
+  cambios++;
+} else {
+  console.log('• QWEN_DIR: ya es ".jpcode"');
 }
 
 if (cambios) {

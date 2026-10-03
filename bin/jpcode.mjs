@@ -146,14 +146,14 @@ if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(QWEN_LEGACY, 
   cpSync(QWEN_LEGACY, JP_HOME, { recursive: true });
   aviso(`config inicial copiada de ${QWEN_LEGACY} a ${JP_HOME}`);
 }
-if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(GATEWAY, "qwen-settings.json"))) {
+if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(GATEWAY, "jpcode-settings.json"))) {
   mkdirSync(JP_HOME, { recursive: true });
-  cpSync(join(GATEWAY, "qwen-settings.json"), join(JP_HOME, "settings.json"));
+  cpSync(join(GATEWAY, "jpcode-settings.json"), join(JP_HOME, "settings.json"));
   aviso("config inicial sembrada desde la plantilla del gateway");
 }
 
 /* 2) Comandos propios, que llegan con el paquete. */
-const COMANDOS_ORIGEN = join(GATEWAY, "qwen-commands");
+const COMANDOS_ORIGEN = join(GATEWAY, "jpcode-commands");
 if (existsSync(COMANDOS_ORIGEN) && !existsSync(join(JP_HOME, "commands"))) {
   cpSync(COMANDOS_ORIGEN, join(JP_HOME, "commands"), { recursive: true });
 }
@@ -400,8 +400,8 @@ const URL_GATEWAY = `http://127.0.0.1:${puerto ?? PUERTO}/v1`;
    puerto, no al de siempre: si el 8096 estaba ocupado, los ajustes tienen que
    reflejarlo o el motor pediría al gateway equivocado.
    OPENCODE_SYNC_MODELS=0 la desactiva. */
-if (gatewayListo && process.env.OPENCODE_SYNC_MODELS !== "0" && existsSync(join(GATEWAY, "sync-qwen-models.mjs"))) {
-  spawnSync(process.execPath, [join(GATEWAY, "sync-qwen-models.mjs")], {
+if (gatewayListo && process.env.OPENCODE_SYNC_MODELS !== "0" && existsSync(join(GATEWAY, "sync-jpcode-models.mjs"))) {
+  spawnSync(process.execPath, [join(GATEWAY, "sync-jpcode-models.mjs")], {
     stdio: "ignore",
     env: {
       ...process.env,

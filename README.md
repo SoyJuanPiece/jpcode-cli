@@ -284,11 +284,11 @@ salen byte a byte como antes.
 | `publish-npm.sh` | Publica en npm lo que dejó `build-dist.sh`, con npm o con `--bun`. |
 
 La parte «tipo OpenCode» son los parches que `vendor-engine.sh` aplica al motor al traerlo:
-`patch-qwen-providers.mjs` (catálogo completo de models.dev),
-`patch-qwen-auth.mjs` (buscador en el diálogo de conexión), `patch-qwen-connect.mjs`
-(`/provider` como alias y abrir directo en el catálogo), `patch-qwen-search.mjs`
-(buscador en `/model`), `patch-qwen-model-sections.mjs` (`/model` por proveedores, en dos
-niveles) y `patch-qwen-discover.mjs` (**Custom Provider**: pegas tu Base URL y tu API key y los
+`patch-jpcode-providers.mjs` (catálogo completo de models.dev),
+`patch-jpcode-auth.mjs` (buscador en el diálogo de conexión), `patch-jpcode-connect.mjs`
+(`/provider` como alias y abrir directo en el catálogo), `patch-jpcode-search.mjs`
+(buscador en `/model`), `patch-jpcode-model-sections.mjs` (`/model` por proveedores, en dos
+niveles) y `patch-jpcode-discover.mjs` (**Custom Provider**: pegas tu Base URL y tu API key y los
 modelos se detectan solos, como en OpenCode). El envoltorio del gateway refresca la lista de
 `/model` en cada arranque.
 

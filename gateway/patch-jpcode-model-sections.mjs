@@ -4,9 +4,9 @@
  * primero los **proveedores** (con cuántos modelos tiene cada uno) y al elegir
  * uno, **solo sus modelos**. `Esc` (o el ítem «‹ Todos los proveedores») vuelve.
  *
- *   node opencode-chat/patch-qwen-model-sections.mjs
+ *   node opencode-chat/patch-jpcode-model-sections.mjs
  *
- * Depende de patch-qwen-search.mjs: se aplica DESPUÉS y reescribe justo lo que
+ * Depende de patch-jpcode-search.mjs: se aplica DESPUÉS y reescribe justo lo que
  * ese dejó (el estado `__q`, el filtro y el render). Con 150+ modelos en una
  * lista plana no hay quien elija; así queda:
  *
@@ -17,7 +17,7 @@
  *   │   ‹ Esc vuelve · Enter elige · escribe para buscar                    │
  *
  * ¿De dónde sale el proveedor de cada modelo? Del propio nombre que escribe
- * `sync-qwen-models.mjs` («Modelo · Proveedor»), eligiendo el extremo que más se
+ * `sync-jpcode-models.mjs` («Modelo · Proveedor»), eligiendo el extremo que más se
  * repite (así vale tanto «Grok 4.7 · OpenCode Zen» como «Google · Gemini 3.1»).
  * Si no hay « · », se usa el host de su `baseUrl` (los que conectas con
  * `/connect`), y si tampoco, el tipo de autenticación.
@@ -30,7 +30,10 @@ import { join } from "node:path";
 import { execSync } from "node:child_process";
 
 function paqueteQwen() {
-  if (process.env.QWEN_PKG) return process.env.QWEN_PKG;
+  /* JPCODE_ENGINE es el nombre propio; QWEN_PKG se sigue leyendo por si alguien
+     llama a estos parches a mano con el nombre viejo. */
+  const rutaMotor = process.env.JPCODE_ENGINE ?? process.env.QWEN_PKG;
+  if (rutaMotor) return rutaMotor;
   const candidatos = [];
   try {
     candidatos.push(execSync("npm root -g", { encoding: "utf8" }).trim());
@@ -51,7 +54,7 @@ const PKG = paqueteQwen();
 const FICHERO = join(PKG, "chunks", "startInteractiveUI-ZKYQSLKT.js");
 const MARCADOR = "const[__prov,__setProv]=";
 
-/* Anclas: los trozos que dejó patch-qwen-search.mjs (únicos en el fichero). */
+/* Anclas: los trozos que dejó patch-jpcode-search.mjs (únicos en el fichero). */
 const Q_INI = 'const[__q,__setQ]=(0,import_react32.useState)("");';
 const Q_FIN = "},[__q,MODEL_OPTIONS]);";
 const TECLA_VIEJA =
@@ -168,7 +171,7 @@ if (!s.includes(MARCADOR)) {
   const a = s.indexOf(Q_INI);
   const b = a < 0 ? -1 : s.indexOf(Q_FIN, a);
   if (a < 0 || b < 0) {
-    console.log("  ⚠️  estado y agrupación: no encontré el bloque de patch-qwen-search.mjs");
+    console.log("  ⚠️  estado y agrupación: no encontré el bloque de patch-jpcode-search.mjs");
   } else {
     s = s.slice(0, a) + ESTADO_NUEVO + s.slice(b + Q_FIN.length);
     console.log("• estado y agrupación por proveedor: hecho");
@@ -244,7 +247,7 @@ if (!faltan.length) {
   console.log("   Tras `qwen update`, relanza este script.");
 } else {
   console.log(`\n⚠️  Falta por aplicar: ${faltan.join(", ")}.`);
-  console.log("   Revisa la versión de Qwen Code (¿está applied patch-qwen-search.mjs?).");
+  console.log("   Revisa la versión de Qwen Code (¿está applied patch-jpcode-search.mjs?).");
   process.exitCode = 1;
 }
 process.exit(0);

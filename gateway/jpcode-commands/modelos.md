@@ -9,7 +9,7 @@ disable-model-invocation: true
 Qwen ya ha ejecutado el catálogo de modelos con tus argumentos; esta es su salida real:
 
 ```text
-!{node __CHAT_DIR__/qwen-modelos.mjs $ARGUMENTS}
+!{node __CHAT_DIR__/jpcode-modelos.mjs $ARGUMENTS}
 ```
 
 Muestra esa salida **tal cual**, dentro de un bloque de código, sin resumirla ni reformatearla.
