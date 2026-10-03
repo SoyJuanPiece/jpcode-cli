@@ -60,7 +60,7 @@ const HOST = process.env.HOST || "127.0.0.1";
 const ROOT = process.env.OPENCODE_CHAT_DIR || process.cwd();
 const UPSTREAM = process.env.OPENCODE_BASE || "https://opencode.ai/zen/v1";
 const KEY = process.env.OPENCODE_API_KEY || process.env.ZEN_API_KEY || "";
-const MAX_BODY = 2 * 1024 * 1024; // 2 MB, de sobra para un chat
+const MAX_BODY = 30 * 1024 * 1024; // 30 MB, para soportar capturas e imágenes en base64
 
 /* CORS abierto por defecto: la API es para que la llames desde donde quieras.
  * Ojo: el CORS no autentica. Lo que protege /v1/ es CHAT_API_KEY. */
@@ -470,6 +470,7 @@ const MODELOS_PUBLICOS = MODELS.map((m) => ({
   // Extra informativo; los clientes OpenAI ignoran lo que no conocen.
   x_opencode_title: m.title,
   x_opencode_tone: m.tone,
+  ...(m.modalities ? { x_opencode_modalities: m.modalities } : {}),
 }));
 
 /* ================== multi-proveedor (portado de OpenCode) ================== */

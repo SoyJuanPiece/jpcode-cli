@@ -96,7 +96,10 @@ for (const m of lista) {
   if (prov !== "__zen" && soloZen) continue;
   if (ZEN_PLAN.has(prov) && !conZenPlan) continue;
   if (!grupos.has(prov)) grupos.set(prov, []);
-  grupos.get(prov).push({ id, titulo, protocolo: m.x_opencode_protocol || "openai", free: m.x_opencode_free });
+  const modalities = m.x_opencode_modalities || (
+    /mimo|longcat-2\.5|space-bunny|vision|[-_]vl/i.test(id) ? { image: true, video: true } : undefined
+  );
+  grupos.get(prov).push({ id, titulo, protocolo: m.x_opencode_protocol || "openai", free: m.x_opencode_free, modalities });
 }
 const ordenados = [...grupos.keys()].sort((a, b) => {
   const ia = ORDEN.indexOf(a), ib = ORDEN.indexOf(b);
@@ -108,7 +111,7 @@ const ordenados = [...grupos.keys()].sort((a, b) => {
 const entrada = [];
 for (const prov of ordenados) {
   const etiqueta = nombres[prov] || prov;
-  for (const { id, titulo, protocolo, free } of grupos.get(prov)) {
+  for (const { id, titulo, protocolo, free, modalities } of grupos.get(prov)) {
     const esGratis = prov === "__zen" ? true : free;
     const tag = (esGratis === true && prov !== "__zen") ? " [Gratis]" : (esGratis === false && prov !== "__zen") ? " [De pago]" : "";
     const desc = prov === "__zen"
@@ -124,6 +127,7 @@ for (const prov of ordenados) {
       description: desc,
       baseUrl: BASE,
       envKey: ENVKEY,
+      ...(modalities ? { modalities } : {}),
     });
   }
 }

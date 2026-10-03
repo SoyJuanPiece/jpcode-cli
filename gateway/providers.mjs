@@ -369,6 +369,7 @@ export async function modelos({ todos = false, cat = null, cfg = null } = {}) {
       return gb - ga;
     });
     for (const m of mods) {
+      const hasVision = Boolean(m.attachment || m.modalities?.input?.includes("image") || /(?:vision|[-_]vl(?:[-_]|$))/i.test(m.id));
       salida.push({
         id: `${p.id}/${m.id}`,
         object: "model",
@@ -378,6 +379,7 @@ export async function modelos({ todos = false, cat = null, cfg = null } = {}) {
         x_opencode_provider: p.id,
         x_opencode_protocol: p.protocolo,
         x_opencode_free: esModeloGratis(p.id, m.id, m),
+        ...(hasVision ? { x_opencode_modalities: { image: true, video: true } } : {}),
         ...(m.limit ? { x_opencode_limit: m.limit } : {}),
       });
     }

@@ -12,11 +12,11 @@
  */
 export const MODELS = [
   { id: "big-pickle", title: "Big Pickle", tone: "ok", note: "el más equilibrado; identidad stealth" },
-  { id: "mimo-v2.6-flash-free", title: "MiMo V2.6 Flash Free", tone: "ok", note: "el más rápido (≈1 s)" },
-  { id: "longcat-2.5-preview-free", title: "LongCat 2.5 Preview Free", tone: "ok", note: "el más constante en español" },
+  { id: "mimo-v2.6-flash-free", title: "MiMo V2.6 Flash Free", tone: "ok", note: "el más rápido (≈1 s)", modalities: { image: true, video: true } },
+  { id: "longcat-2.5-preview-free", title: "LongCat 2.5 Preview Free", tone: "ok", note: "el más constante en español", modalities: { image: true } },
   { id: "nemotron-3-ultra-free", title: "Nemotron 3 Ultra Free", tone: "ok", note: "no sale en /models, pero responde" },
-  { id: "mimo-v2.5-free", title: "MiMo V2.5 Free", tone: "ok", note: "bueno, pero lento (5-11 s)" },
-  { id: "space-bunny-free", title: "Space Bunny Free", tone: "ok", note: "el único que va también sin key" },
+  { id: "mimo-v2.5-free", title: "MiMo V2.5 Free", tone: "ok", note: "bueno, pero lento (5-11 s)", modalities: { image: true, video: true } },
+  { id: "space-bunny-free", title: "Space Bunny Free", tone: "ok", note: "el único que va también sin key", modalities: { image: true, video: true } },
   { id: "nemotron-3.5-lightning-free", title: "Nemotron 3.5 Lightning Free", tone: "warn", note: "vuelca su cadena de pensamiento; 45-120 s" },
   { id: "muse-spark-1.3-contributor-free", title: "Muse Spark 1.3 Contributor Free", tone: "bad", note: "400: habla el protocolo /responses" },
   { id: "muse-spark-1.2-contributor-free", title: "Muse Spark 1.2 Contributor Free", tone: "bad", note: "igual; comparte prompts con Meta" },

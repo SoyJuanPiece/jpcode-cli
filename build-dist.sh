@@ -47,7 +47,7 @@ if [ ! -f "$AQUI/engine/cli-entry.js" ]; then
   bash "$AQUI/vendor-engine.sh" >/dev/null || { echo "✗ no pude traer el motor" >&2; exit 1; }
 else
   echo "→ actualizando parches sobre el motor en engine/…"
-  for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render; do
+  for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render patch-jpcode-vision; do
     QWEN_PKG="$AQUI/engine" node "$AQUI/$p.mjs" >/dev/null 2>&1 || true
   done
   for p in patch-qwen-search patch-qwen-providers patch-qwen-auth patch-qwen-connect patch-qwen-model-sections patch-qwen-discover; do
