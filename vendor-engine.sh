@@ -58,7 +58,7 @@ rm -rf "$MOTOR/examples" "$MOTOR/docs" 2>/dev/null || true
 
 echo "→ aplicando los parches de jpcode sobre el motor (en el build, no al instalar)"
 FALLADOS=""
-for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render; do
+for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render patch-jpcode-minimax-plan; do
   if [ -f "$AQUI/$p.mjs" ]; then
     if ! JPCODE_ENGINE="$MOTOR" node "$AQUI/$p.mjs" >/dev/null 2>&1; then
       FALLADOS="$FALLADOS $p"

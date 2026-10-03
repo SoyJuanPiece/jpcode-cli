@@ -47,7 +47,7 @@ if [ ! -f "$AQUI/engine/cli-entry.js" ]; then
   bash "$AQUI/vendor-engine.sh" >/dev/null || { echo "✗ no pude traer el motor" >&2; exit 1; }
 else
   echo "→ actualizando parches sobre el motor en engine/…"
-  for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render patch-jpcode-vision patch-jpcode-aesthetics; do
+  for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render patch-jpcode-vision patch-jpcode-aesthetics patch-jpcode-minimax-plan; do
     JPCODE_ENGINE="$AQUI/engine" node "$AQUI/$p.mjs" >/dev/null 2>&1 || true
   done
   for p in patch-jpcode-search patch-jpcode-providers patch-jpcode-auth patch-jpcode-connect patch-jpcode-model-sections patch-jpcode-discover; do
