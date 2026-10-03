@@ -1,6 +1,6 @@
 {
   "name": "@juanpiecedev/jpcode",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "description": "jpcode — el CLI de código de JuanPiece: pinta de Claude Code, modelos gratis y tu propia API key, con gateway local.",
   "type": "module",
   "bin": {

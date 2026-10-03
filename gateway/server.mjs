@@ -76,20 +76,26 @@ const OFFICIAL_TOOLS = [
 ];
 
 /* Descripciones de esas tools de relleno. El servidor solo mira los NOMBRES, asi
-   que puede poner lo que quiera; se pone una descripción normal porque el modelo
-   si lee estas, y antes le deciamos que no las llamara nunca. */
+   que puede poner lo que quiera.
+ *
+ * EN INGLÉS, a propósito. Estas descripciones solo las lee el modelo, nunca la
+   persona, asi que el idioma es cosa del modelo. Con las descripciones en
+   español el modelo se copiaba del idioma y se inventaba los nombres de las
+ * herramientas en español —llegó a pedir una que se llamaba `Listar`, que no
+   existe— y la llamada fallaba con "params must have required property".
+ */
 const DESCRIPCION_FILLER = {
-  bash: "Ejecuta un comando de la shell del sistema.",
-  edit: "Edita un fichero sustituyendo un trozo de texto por otro.",
-  glob: "Busca ficheros que coinciden con un patrón.",
-  grep: "Busca un texto dentro de los ficheros.",
-  read: "Lee el contenido de un fichero.",
-  skill: "Carga una habilidad para ampliar lo que sabes hacer.",
-  task: "Lanza a otro agente para una subtarea.",
-  todowrite: "Apunta una lista de tareas pendientes.",
-  webfetch: "Descarga una pagina web.",
-  websearch: "Busca algo en internet.",
-  write: "Escribe un fichero entero.",
+  bash: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
+  edit: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
+  glob: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
+  grep: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
+  read: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
+  skill: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
+  task: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
+  todowrite: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
+  webfetch: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
+  websearch: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
+  write: "Reserved by the platform. Not available in this session: do not call it, use the tools you were given instead.",
 };
 
 /* ================== tu clave del gateway ================== */
