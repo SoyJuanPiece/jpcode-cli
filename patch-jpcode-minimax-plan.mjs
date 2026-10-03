@@ -4,19 +4,18 @@
  *
  * ## Problema
  *
- * El modelo MiniMax (minimax-text-01, minimax-m1, etc.) en ocasiones emite tool calls
- * como texto XML dentro del `delta.content` del stream:
+ * Los modelos MiniMax / OpenCode Zen emiten las tool_calls en varios formatos de texto XML
+ * o delimitadores de protocolo propios (por ejemplo, `]<]minimax>[{<invoke name="glob">...`,
+ * `<tool_call>...`, etc.), además de incluir caracteres de ancho cero (\u200B).
  *
- *   <tool_call>{"name":"glob","arguments":{"pattern":"**\/*","path":"C:\\Users\\..."}}</tool_call>
- *
- * O variantes con sintaxis similar. El motor de jpcode no las interceptaba en el stream,
- * provocando que en modo plan aparezca el XML sin traducir en pantalla.
+ * Sin un parser completo de estos formatos en el stream, el CLI de jpcode mostraba
+ * etiquetas XML y basura de protocolo como `]<]minimax>[` en pantalla sin ejecutar las herramientas.
  *
  * ## Solución
  *
- * Parchamos `MiniMaxOpenAICompatibleProvider` en `chunk-UZ5AMSVC.js` para interceptar
- * el stream de MiniMax y convertir automáticamente cualquier `<tool_call>...</tool_call>`
- * hallado en el contenido textual a objetos `tool_calls` estructurados.
+ * Implementa la función completa `extraerToolCallsDeTexto` en `MiniMaxOpenAICompatibleProvider`
+ * dentro de `chunk-UZ5AMSVC.js`. Parsea tanto `<tool_call>` como `<invoke>`, limpia caracteres
+ * de ancho cero y marcas de MiniMax, y convierte el resultado a `tool_calls` estructuradas.
  */
 
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -57,41 +56,100 @@ const MARCADOR = "JPCODE_MINIMAX_TOOL_CALL_PATCH";
 const OBJETIVO = `getResponseParsingOptions(){return{taggedThinkingTags:true}}};`;
 
 const REEMPLAZO = `getResponseParsingOptions(){return{taggedThinkingTags:true}}
-/* ${MARCADOR} — interceptor de tool_calls en texto para MiniMax */
+/* ${MARCADOR} — interceptor y parser completo de tool_calls en texto para MiniMax */
 postProcessStreamChunk(chunk){
   const choice=chunk?.choices?.[0];
   if(!choice)return chunk;
   if(choice.delta?.tool_calls?.length>0)return chunk;
   const raw=choice.delta?.content;
-  if(typeof raw!=="string"||!raw.includes("<tool_call>"))return chunk;
-  const TOOL_RE=/<tool_call>([\\s\\S]*?)<\\/tool_call>/g;
+  if(typeof raw!=="string"||!raw)return chunk;
+
+  this._pendingText=(this._pendingText||"")+raw;
+  const contentToProcess=this._pendingText;
+
+  const limpio=contentToProcess
+    .replace(/[\\u200B-\\u200D\\u2060]/g,"")
+    .replace(/\\]?[\\s\\u200B-\\u200D\\u2060]*\\[\\s*minimax\\s*[>\\]]?\\s*\\[?/gi,"");
+
   const toolCalls=[];
-  let idxCounter=0;
-  let m;
-  while((m=TOOL_RE.exec(raw))!==null){
-    let parsed;
-    try{parsed=JSON.parse(m[1].trim())}catch{continue}
-    const name=parsed.name||parsed.tool_name||parsed.function||"unknown";
-    const args=parsed.arguments||parsed.parameters||parsed.args||{};
-    toolCalls.push({
-      index:idxCounter++,
-      id:\`call_mm_\${Date.now()}_\${idxCounter}\`,
-      type:"function",
-      function:{name,arguments:typeof args==="string"?args:JSON.stringify(args)}
-    });
+  let idx=0;
+  const mk=(nombre,args)=>({
+    id:\`call_\${nombre}_\${Date.now().toString(36)}_\${idx++}\`,
+    type:"function",
+    function:{name:nombre,arguments:typeof args==="string"?args:JSON.stringify(args)}
+  });
+
+  /* 1. <tool_call> ... </tool_call> */
+  const bloqueRe=/<?\\s*tool_call\\s*>([\\s\\S]*?)<\\/?\\s*tool_call\\s*>/gi;
+  let bm;
+  while((bm=bloqueRe.exec(limpio))!==null){
+    const cuerpo=(bm[1]||"").trim();
+    if(!cuerpo)continue;
+    let datos=null;
+    try{datos=JSON.parse(cuerpo)}catch{
+      let candidato=cuerpo.replace(/\`\`\`(?:json)?\\s*([\\s\\S]*?)\`\`\`/g,"$1").replace(/,\\s*([\\]}])/g,"$1");
+      try{datos=JSON.parse(candidato.trim())}catch{
+        const arreglado=candidato.replace(/\\\\(?!["\\\\/bfnrtu])/g,"\\\\\\\\");
+        try{datos=JSON.parse(arreglado.trim())}catch{}
+      }
+    }
+    if(datos){
+      for(const uno of Array.isArray(datos)?datos:[datos]){
+        if(!uno||typeof uno!=="object")continue;
+        const nombre=uno.name||uno.tool_name||uno.function?.name;
+        if(!nombre)continue;
+        let args=uno.arguments??uno.args??uno.parameters??uno.function?.arguments??{};
+        if(typeof args==="string"){try{args=JSON.parse(args)}catch{args={value:args}}}
+        toolCalls.push(mk(String(nombre),args));
+      }
+    }
   }
-  if(toolCalls.length===0)return chunk;
-  const cleanedContent=raw.replace(/<tool_call>[\\s\\S]*?<\\/tool_call>/g,"").trim();
+
+  /* 2. <invoke name="..."> ... </invoke> */
+  const invokeRe=/<invoke\\s+name\\s*=?\\s*["']?\\s*([A-Za-z0-9_.-]+)["']?\\s*>([\\s\\S]*?)<\\/invoke>/gi;
+  let im;
+  while((im=invokeRe.exec(limpio))!==null){
+    const nombre=im[1];
+    const cuerpo=im[2];
+    const args={};
+    const paramRe=/<parameter\\s+name\\s*=\\s*["']?([A-Za-z0-9_.-]+)["']?\\s*>([\\s\\S]*?)<\\/parameter>/gi;
+    let pm;
+    while((pm=paramRe.exec(cuerpo))!==null){args[pm[1]]=pm[2].replace(/\\s+/g," ").trim()}
+    const tagRe=/<([A-Za-z0-9_.-]+)>([\\s\\S]*?)<\\/\\1>/g;
+    let tm;
+    while((tm=tagRe.exec(cuerpo))!==null){if(tm[1]!=="parameter"){args[tm[1]]=tm[2].replace(/\\s+/g," ").trim()}}
+    toolCalls.push(mk(String(nombre),args));
+  }
+
+  /* 3. Limpiar marcas del texto visible */
+  let contentLimpio=limpio
+    .replace(/<?\\s*tool_call\\s*>[\\s\\S]*?<\\/?\\s*tool_call\\s*>/gi,"")
+    .replace(/<invoke\\s+[\\s\\S]*?<\\/invoke>/gi,"")
+    .replace(/<invoke\\s+[^>]*>/gi,"")
+    .replace(/<\\/invoke>/gi,"")
+    .replace(/\\]?\\[minimax[^\\n]*$/gi,"")
+    .replace(/\\]<\\]minimax>\\[?/gi,"")
+    .replace(/[>\\]\\[}{]*$/g,"")
+    .trim();
+
+  if(toolCalls.length===0){
+    if(contentLimpio!==raw){
+      return{...chunk,choices:[{...choice,delta:{...choice.delta,content:contentLimpio||null}}]};
+    }
+    return chunk;
+  }
+
+  this._pendingText="";
   const newChoice={
     ...choice,
     delta:{
       ...choice.delta,
-      content:cleanedContent||null,
+      content:contentLimpio||null,
       tool_calls:toolCalls
     }
   };
   const fr=choice.finish_reason;
-  if(!cleanedContent&&fr==="stop"){
+  if(!contentLimpio&&fr==="stop"){
     newChoice.finish_reason="tool_calls";
   }
   return{...chunk,choices:[newChoice,...(chunk.choices?.slice(1)||[])]};
