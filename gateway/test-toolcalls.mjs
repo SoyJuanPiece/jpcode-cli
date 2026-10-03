@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { CAPTURA_0_2_13, CAPTURA_SIN_INVISIBLES, CAPTURA_0_2_14 } from "./fixtures-toolcalls.mjs";
+import { CAPTURA_0_2_13, CAPTURA_SIN_INVISIBLES, CAPTURA_0_2_14, CAPTURA_BUCLE, CAPTURA_SIN_CERRAR } from "./fixtures-toolcalls.mjs";
 
 /* Se extrae la función tal cual está en server.mjs —copiada, no reimplementada—
    para que la prueba falle si el servidor deja de soportarlo. */
@@ -125,6 +125,77 @@ check(
     p2.toolCalls[0].function.arguments === '{"pattern":"x"}',
   JSON.stringify(p2.toolCalls),
 );
+
+/* --- memoria: el caso que acabó en "Fatal process out of memory" ---------- */
+console.log("\nMemoria con el modelo en bucle:");
+/* Reproduce lo que se ve cuando el modelo repite la misma llamada cientos de
+ * veces: varios MB de texto con muchísimos <invoke>. La primera versión copiaba
+ * el resto del texto entero por cada invocación y reventaba el proceso. */
+const enBucle =
+  "Voy a revisar. ][minimax][{<tool_call>" +
+  '<invoke name="glob"><pattern>C:/Users/Usuario/Desktop/**</pattern></invoke>'.repeat(6000) +
+  "][minimax>[</tool_call>";
+const mb = (enBucle.length / 1024 / 1024).toFixed(1);
+const antes = process.memoryUsage().heapUsed;
+const t0 = Date.now();
+const rBucle = E(enBucle);
+const ms = Date.now() - t0;
+const grew = Math.round((process.memoryUsage().heapUsed - antes) / 1024 / 1024);
+check(
+  `no revienta con ${mb} MB y 6000 invocaciones`,
+  rBucle.toolCalls.length <= 24,
+  `${rBucle.toolCalls.length} tool calls en ${ms} ms`,
+);
+check("y la memoria crece poco", grew < 200, `+${grew} MB de heap`);
+
+/* Un cuerpo sin cerrar no debe comerse el texto entero: se acota, no se guarda
+   medio megabyte como argumento (que es lo que dispara el OOM). */
+const sinCerrar = "<tool_call><invoke name=\"grep\"><pattern>" + "a".repeat(500000);
+const rSinCerrar = E(sinCerrar);
+const argSinCerrar = rSinCerrar.toolCalls[0]?.function.arguments ?? "";
+check(
+  "una invocación sin cerrar no revienta ni guarda medio megabyte de argumento",
+  rSinCerrar.toolCalls.length === 1 && argSinCerrar.length <= 4100,
+  `${argSinCerrar.length} caracteres de argumento`,
+);
+
+/* ---- La captura del bucle tal cual, sin__(500000) de relleno sintético ---- */
+console.log("\nLa captura del bucle de 0.2.14, con el texto literal de la pantalla:");
+{
+  const antesB = process.memoryUsage().heapUsed;
+  const t0b = Date.now();
+  const r = E(CAPTURA_BUCLE);
+  const msb = Date.now() - t0b;
+  const crecio = Math.round((process.memoryUsage().heapUsed - antesB) / 1024 / 1024);
+  check(
+    "no revienta y corta las llamadas",
+    r.toolCalls.length <= 24,
+    `${r.toolCalls.length} tool calls, ${msb} ms, +${crecio} MB`,
+  );
+  check(
+    "y no queda ni un trozo del bucle en el texto visible",
+    r.contentLimpio.length < 200 && !/invoke|tool_call|pattern|minimax/.test(r.contentLimpio),
+    JSON.stringify(r.contentLimpio.slice(0, 120)),
+  );
+}
+
+console.log("\nLa captura de 0.2.15: la llamada sin cerrar que se veía en crudo:");
+{
+  const r = E(CAPTURA_SIN_CERRAR);
+  const cmd = r.toolCalls.find((t) => t.function.name === "cmd");
+  check(
+    "saca la llamada a cmd",
+    Boolean(cmd) && /dir \/b/.test(JSON.parse(cmd.function.arguments).command || ""),
+    cmd ? cmd.function.arguments : "no salió",
+  );
+  check(
+    "y el XML desaparece COMPLETO del texto visible",
+    !/[<>]/.test(r.contentLimpio) &&
+      r.contentLimpio.startsWith("Primero reviso") &&
+      !r.contentLimpio.includes("2>nul"),
+    JSON.stringify(r.contentLimpio),
+  );
+}
 
 console.log(fallos ? `\n❌ ${fallos} fallo(s)` : "\n✅ todos los formatos se convierten en tool calls reales");
 

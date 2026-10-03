@@ -361,7 +361,7 @@ function partesDelSse(sse) {
 }
 
 /**
- * Extrae tool calls que el modelo emitió como texto plano (formato MiniMax u otros).
+ * Extrae tool calls que el modelo emitió como texto plano (formatos MiniMax y otros).
  *
  * ## Por qué hay dos formatos y por qué esto se rompió
  *
@@ -384,6 +384,12 @@ function partesDelSse(sse) {
  * Devuelve { toolCalls, contentLimpio } donde toolCalls tiene el formato OpenAI.
  */
 function extraerToolCallsDeTexto(content) {
+  /* Topes. Un turno normal son unas pocas tool calls; el alto esta para que un
+     modelo en bucle no convierta el extractor en un hoyo de memoria. El cuerpo de
+     una invocacion tampoco es ilimitado: si el cierre no llega, se corta. */
+  const MAX_TOOL_CALLS = 24;
+  const MAX_CUERPO = 8000;
+
   if (!content) return { toolCalls: [], contentLimpio: "" };
   // Detectar si hay intento de tool call en el texto
   const tieneInvoke = content.includes("<invoke") || content.includes("tool_call");
@@ -392,7 +398,14 @@ function extraerToolCallsDeTexto(content) {
   // Limpiar tokens especiales de MiniMax (][minimax>[, ][minimax][, etc.).
   // Aparecen con y sin carácter de ancho cero y con `>` o `]` detrás de
   // "minimax", así que se recogen todos de una vez.
-  let limpio = content.replace(/\][\s\u200B-\u200D\u2060]*\[minimax\s*[>\]]?\s*\[?/g, "");
+  /* Los tokens de herramienta del modelo vienen con caracteres de ancho cero
+     pegados justo despues del `<` (`<\u200Btool_call>`). Ojo: `\s` NO incluye
+     el ancho cero, asi que sin esta limpieza previa el marcador no se encuentra
+     ni en el patrón ni en `tieneInvoke`, la llamada se pierde y el XML crudo se
+     queda en pantalla tal cual. */
+  let limpio = content
+    .replace(/[\u200B-\u200D\u2060]/g, "")
+    .replace(/\][\s\u200B-\u200D\u2060]*\[minimax\s*[>\]]?\s*\[?/g, "");
 
   const toolCalls = [];
   let idx = 0;
@@ -463,18 +476,28 @@ function extraerToolCallsDeTexto(content) {
   // `"k": "v"`. Por eso se busca el nombre de forma tolerante (`name` luego, como
   // venga, el identificador) y los argumentos en los dos formatos.
   const invokeRe = /<invoke\s+name\s*=?\s*["']?\s*([A-Za-z0-9_.-]+)/g;
+  /* Buscar el cierre desde un offset, sin copiar el resto del texto. */
+  const finRe = /<invoke|<\/invoke/gi;
   let m;
   const vistos = new Set();
-  while ((m = invokeRe.exec(limpio)) !== null) {
+  while (toolCalls.length < MAX_TOOL_CALLS && (m = invokeRe.exec(limpio)) !== null) {
     const nombre = m[1].trim();
     if (!nombre) continue;
 
-    // El cuerpo de esta invocación va de aquí hasta la siguiente <invoke> o
-    // </invoke>. Es más fiable que un `[^>]*` porque el cierre a veces no viene.
-    const desde = m.index + m[0].length;
-    const resto = limpio.slice(desde);
-    const finRel = resto.search(/<invoke|<\/invoke/i);
-    const cuerpo = finRel === -1 ? resto : resto.slice(0, finRel);
+    /* El cuerpo va de aquí hasta la siguiente <invoke> o </invoke>.
+     *
+     * Ojo con esto: la primera versión hacía `limpio.slice(desde)` y buscaba en
+     * esa copia, o sea que copiaba el resto entero del texto **por cada**
+     * invocación. Con el modelo en bucle —que es lo que pasa cuando se
+     * equivoca repetidamente, y genera varios MB— eso termina en "Fatal process
+     * out of memory". Ahora se busca el cierre con un regex pegajoso sobre el
+     * propio `limpio` y solo se copia el trozo del cuerpo, que va acotado. */
+    const desde = invokeRe.lastIndex;
+    finRe.lastIndex = desde;
+    const fm = finRe.exec(limpio);
+    const corte = fm ? fm.index : limpio.length;
+    let cuerpo = limpio.slice(desde, corte);
+    if (cuerpo.length > MAX_CUERPO) cuerpo = cuerpo.slice(0, MAX_CUERPO);
 
     const args = {};
     // a) etiquetas: <pattern>valor</pattern>
@@ -490,6 +513,23 @@ function extraerToolCallsDeTexto(content) {
       if (pm[2] !== undefined) args[pm[1]] = pm[2];
       else if (pm[3] !== undefined) args[pm[1]] = Number(pm[3]);
     }
+    /* c) etiqueta abierta y NUNCA cerrada: `<command>cmd /c dir …`
+     *
+     * Es el caso de la captura de 0.2.15. Los dos extractores de arriba necesitan
+     * algo que se cierre —una etiqueta `</command>` o una coma delante del par— y
+     * cuando el modelo se corta a mitad no hay nada de eso, así que la llamada
+     * salía con los argumentos vacíos y el motor la ejecutaba sin comando
+     * (o la rechazaba). Se lee el último `<param>` abierto hasta donde acaba el
+     * cuerpo. Solo si no se ha sacdo nada por los otros dos caminos, para no
+     * pisar lo que ya esté bien. */
+    if (Object.keys(args).length === 0) {
+      const abierto = /<([A-Za-z0-9_.-]+)>([\s\S]*)$/.exec(cuerpo);
+      /* Tope propio y mucho menor que MAX_CUERPO: lo que se rescue aqui es el
+         resto del texto del modelo cuando se corta a mitad, que puede ser de
+         megabytes. Un comando, una ruta o un patrón no pasan de unas cientos de
+         caracteres, asi que a 4000 no se pierde nada util. */
+      if (abierto) args[abierto[1]] = abierto[2].replace(/\s+/g, " ").trim().slice(0, 4000);
+    }
 
     /* La deduplicación va por nombre **y argumentos**, no solo por nombre: el
        modelo mete dos glob seguidos en el mismo bloque, y son llamadas
@@ -503,10 +543,33 @@ function extraerToolCallsDeTexto(content) {
 
     toolCalls.push(mk(nombre, args));
   }
+  if (invokeRe.exec(limpio) !== null && toolCalls.length >= MAX_TOOL_CALLS) {
+    console.error(
+      `[jpcode-gateway] más de ${MAX_TOOL_CALLS} tool calls en un mismo texto; se ` +
+        "toman las primeras. Suele ser el modelo en bucle.",
+    );
+  }
 
-  // Quitar los bloques de tool_call e invoke del texto visible
-  const sinTags = limpio
-    .replace(/<?\s*tool_call\s*>[\s\S]*?<\/?\s*?\s*tool_call\s*>/g, "")
+  /* Quitar del texto visible todo lo que huela a tool call.
+   *
+   * Antes solo se borraban los bloques BIEN CERRADOS. Cuando el modelo deja la
+   * llamada sin cerrar —que es lo habitual: `<invoke name="glob"><pattern>C:/x`
+   * y ya esta, sin `</invoke>`— unicamente se iba la etiqueta de apertura y los
+   * argumentos se quedaban delante de los ojos. Eso es exactamente lo que se ve
+   * en las capturas: el XML crudo en pantalla.
+   *
+   * El corte es tajante: desde la primera marca hasta el final no hay texto que
+   * queramos mostrar, solo argumentos y mas llamadas. Asi da igual que el
+   * formato sea el de antes o uno que no conocemos — el texto nunca enseña el
+   * XML, y si no se pudo convertir, se avisa por consola como hasta ahora.
+   */
+  let sinTags = limpio;
+  const marcaRe = /<(?:invoke|tool_call|tool_reflect|function|tool_use)/i;
+  const marca = marcaRe.exec(sinTags);
+  if (marca) sinTags = sinTags.slice(0, marca.index);
+
+  sinTags = sinTags
+    .replace(/<\s*tool_call\s*>[\s\S]*?<\/?\s*?\s*tool_call\s*>/g, "")
     .replace(/<invoke[^>]*>[\s\S]*?<\/invoke>/g, "")
     .replace(/<\/?invoke[^>]*>/g, "")
     .replace(/<\/??\s*tool_call\s*>/g, "")
@@ -517,7 +580,7 @@ function extraerToolCallsDeTexto(content) {
      texto y el motor no ejecutaba nada, sin error ni rastro, que es como se
      llegaron a perder horas de tiempo. Ahora se dice, aunque no se pueda hacer
      nada, para que quede en el registro. */
-  const habiaBloques = /<\s*?\s*tool_call\s*>|<\/??\s*?\s*tool_call\s*>/.test(limpio);
+  const habiaBloques = /<\s*?tool_call\s*>|<\/??\s*?tool_call\s*>|<\/?invoke/i.test(limpio);
   if (habiaBloques && toolCalls.length === 0) {
     console.error(
       "[jpcode-gateway] el modelo emitió bloques <tool_call> en texto y ninguno se " +

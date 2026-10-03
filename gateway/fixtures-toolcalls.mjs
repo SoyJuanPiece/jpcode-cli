@@ -42,3 +42,18 @@ export const CAPTURA_0_2_14 =
   '<invoke name="glob">][minimax>[<pattern>C:/Users/Usuario/Desktop/*</pattern>][minimax>[</invoke>\n' +
   '][minimax>[<invoke name="glob">][minimax>[<pattern>C:/Users/Usuario/Desktop/**/index.html</pattern>][minimax>[</invoke\n' +
   "][minimax>[</tool_call>";
+
+/* ---- La captura del bucle (0.2.14): el modelo repite la llamada sin parar. ----
+ * Es lo que reventaba con "Fatal process out of memory". Nótese que la etiqueta
+ * de cierre ni siquiera está: `<tool_reflect` queda cortado a mitad. */
+export const CAPTURA_BUCLE =
+  ("Primero reviso qué hay en el Escritorio.][minimax>[<tool_call>" +
+   '{"pattern":"C:/Users/Usuario/Desktop"/><tool_reflect').repeat(400);
+
+/* ---- La captura de 0.2.15: la llamada sin cerrar, que se quedaba a la vista. ----
+ * El modelo abre `<invoke name="cmd">`, escribe el comando y nunca llega a
+ * cerrar. Antes solo se borraba la etiqueta de apertura y en pantalla se leía el
+ * XML crudo entero. */
+export const CAPTURA_SIN_CERRAR =
+  'Primero reviso qué hay en el Escritorio para ver si ya existe la carpeta.][minimax>[' +
+  '<invoke name="cmd"><command>cmd /c dir /b "%USERPROFILE%\\OneDrive\\Desktop" 2>nul || echo "no oneDrive desktop"';
