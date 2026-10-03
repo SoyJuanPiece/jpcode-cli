@@ -150,6 +150,47 @@ async function arrancarPuente() {
 }
 await arrancarPuente();
 
+/* 4b) Watcher del portapapeles del sistema. Detecta automáticamente cuando el
+   usuario copia una imagen (captura de pantalla, Ctrl+C sobre imagen, etc.) y
+   la guarda en ~/.jpcode/tmp/clipboard/ para que el motor la adjunte sola.
+   Solo se lanza una instancia: si ya hay una corriendo (PID activo), se reutiliza. */
+function arrancarWatcherClipboard() {
+  if (process.env.JPCODE_CLIP_WATCH === "0") return;
+  const script = join(AQUI, "clipboard-watch.mjs");
+  if (!existsSync(script)) return;
+
+  /* Control de instancia única con fichero PID */
+  const pidFile = join(JP_HOME, "tmp", "clipboard-watch.pid");
+  try {
+    const pid = Number(clave(pidFile));
+    if (pid) {
+      /* Comprobamos si el proceso sigue vivo (kill -0 no lo mata, solo lo toca) */
+      try { process.kill(pid, 0); return; } catch { /* ya murió, arrancamos uno nuevo */ }
+    }
+  } catch { /* no había pidfile */ }
+
+  try {
+    mkdirSync(join(JP_HOME, "tmp"), { recursive: true });
+    const registro = openSync(join(JP_HOME, "tmp", "clipboard-watch.log"), "a");
+    const hijo = spawn(process.execPath, [script], {
+      detached: true,
+      stdio: ["ignore", registro, registro],
+      env: {
+        ...process.env,
+        JPCODE_HOME: JP_HOME,
+        JPCODE_IMG_DIR: join(JP_HOME, "tmp", "clipboard"),
+      },
+    });
+    hijo.unref();
+    /* Guardamos el PID para no arrancar duplicados */
+    try { writeFileSync(pidFile, String(hijo.pid) + "\n"); } catch { /* no crítico */ }
+  } catch (e) {
+    /* No es crítico: si falla, el usuario puede pegar por el puente web */
+  }
+}
+arrancarWatcherClipboard();
+
+
 /* 5) El gateway: el proxy que traduce a todos los proveedores. */
 async function responde(puerto) {
   try {
