@@ -349,8 +349,25 @@ function partesDelSse(sse) {
 
 /**
  * Extrae tool calls que el modelo emitió como texto plano (formato MiniMax u otros).
- * MiniMax escribe sus tokens de herramienta como texto cuando `tool_calls` no está
- * disponible en el stream: `][minimax>[<tool_call><invoke name="glob" ...>`.
+ *
+ * ## Por qué hay dos formatos y por qué esto se rompió
+ *
+ * El tier gratis no emite `tool_calls` en el stream: escribe sus tokens de
+ * herramienta dentro del texto. Pero el formato **cambió** sin avisar, y el
+ * extractor solo conocía el viejo:
+ *
+ *   viejo:  <tool_call><invoke name="glob", "pattern": "C:/Users/*">>
+ *   nuevo:  <tool_call>[{"name":"glob","arguments":{"pattern":"C:/Users/*"}}]</tool_call>
+ *
+ * Con el nuevo el `<invoke>` no aparece, así que la regex no encuentra nada,
+ * `toolCalls` salía vacío y —peor— el bloque se borraba igual del texto visible.
+ * Resultado en pantalla: el modelo parece querer usar una herramienta, se ve el
+ * XML crudo y no se ejecuta absolutely nada, sin ningún error que lo explique.
+ *
+ * Ahora se aceptan los dos, y además un objeto suelto (`{"name":…}`) por si el
+ * modelo emite una sola llamada sin envolverla en array. Los `arguments` pueden
+ * venir como objeto o como string con el JSON ya serializado.
+ *
  * Devuelve { toolCalls, contentLimpio } donde toolCalls tiene el formato OpenAI.
  */
 function extraerToolCallsDeTexto(content) {
@@ -367,9 +384,62 @@ function extraerToolCallsDeTexto(content) {
 
   const toolCalls = [];
   let idx = 0;
+  const mk = (nombre, args) => ({
+    id: `call_${nombre}_${Date.now().toString(36)}_${idx++}`,
+    type: "function",
+    function: { name: nombre, arguments: JSON.stringify(args) },
+  });
 
-  // Patrón: <invoke name="tool_name", "key": "value", ...>
-  // o      <invoke name="tool_name">
+  // --- formato nuevo: <tool_call>[ …JSON… ]</tool_call> ------------------------
+  // Se casa tanto con el array como con el objeto suelto. El `<tool_call>` lleva
+  // un zero-width space justo después del `<`, y no siempre viene; por eso el
+  // patrón acepta `<tool_call>` y `<tool_call>` a la vez.
+  const bloqueRe = /<?\s*tool_call\s*>([\s\S]*?)<\/?\s*?\s*tool_call\s*>/g;
+  let bm;
+  while ((bm = bloqueRe.exec(limpio)) !== null) {
+    const cuerpo = (bm[1] || "").trim();
+    if (!cuerpo) continue;
+    let datos = null;
+    try {
+      datos = JSON.parse(cuerpo);
+    } catch {
+      // El modelo a veces envuelve el JSON en ```json … ```, le deja una coma
+      // suelta, o —lo más frecuente en Windows— escribe la ruta con barras
+      // simples: `"pattern":"C:\Users\..."`, que no es JSON válido porque `\U`
+      // no es un escape. Se reparan esas barras antes de rendirse.
+      const dentro = cuerpo.match(/```(?:json)?\s*([\s\S]*?)```/);
+      let candidato = dentro ? dentro[1] : cuerpo;
+      candidato = candidato.replace(/,\s*([\]}])/g, "$1");
+      try {
+        datos = JSON.parse(candidato.trim());
+      } catch {
+        const arreglado = candidato.replace(/\\(?!["\\/bfnrtu])/g, "\\\\");
+        try {
+          datos = JSON.parse(arreglado.trim());
+        } catch {
+          continue; // no es JSON: lo dejamos como texto, no inventamos una llamada
+        }
+      }
+    }
+    for (const uno of Array.isArray(datos) ? datos : [datos]) {
+      if (!uno || typeof uno !== "object") continue;
+      const nombre = uno.name || uno.function?.name;
+      if (!nombre) continue;
+      let args = uno.arguments ?? uno.args ?? uno.parameters ?? uno.function?.arguments ?? {};
+      // `arguments` llega a veces como string con el JSON dentro
+      if (typeof args === "string") {
+        try {
+          args = JSON.parse(args);
+        } catch {
+          args = { value: args };
+        }
+      }
+      if (!args || typeof args !== "object" || Array.isArray(args)) args = {};
+      toolCalls.push(mk(String(nombre), args));
+    }
+  }
+
+  // --- formato viejo: <invoke name="tool", "k": "v", …> -------------------------
   const invokeRe = /<invoke\s+name="([^"]+)"([^>]*)>/g;
   let m;
   const vistos = new Set();
@@ -388,19 +458,15 @@ function extraerToolCallsDeTexto(content) {
       else if (am[3] !== undefined) args[am[1]] = Number(am[3]);
     }
 
-    toolCalls.push({
-      id: `call_${nombre}_${Date.now().toString(36)}_${idx++}`,
-      type: "function",
-      function: { name: nombre, arguments: JSON.stringify(args) },
-    });
+    toolCalls.push(mk(nombre, args));
   }
 
   // Quitar los bloques de tool_call e invoke del texto visible
   const sinTags = limpio
-    .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, "")
+    .replace(/<?\s*tool_call\s*>[\s\S]*?<\/?\s*?\s*tool_call\s*>/g, "")
     .replace(/<invoke[^>]*>[\s\S]*?<\/invoke>/g, "")
     .replace(/<\/?invoke[^>]*>/g, "")
-    .replace(/<\/?tool_call>/g, "")
+    .replace(/<\/??\s*tool_call\s*>/g, "")
     .trim();
 
   return { toolCalls, contentLimpio: sinTags };
