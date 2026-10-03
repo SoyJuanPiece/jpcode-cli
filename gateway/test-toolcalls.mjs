@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { CAPTURA_0_2_13, CAPTURA_SIN_INVISIBLES, CAPTURA_0_2_14, CAPTURA_BUCLE, CAPTURA_SIN_CERRAR } from "./fixtures-toolcalls.mjs";
+import { CAPTURA_0_2_13, CAPTURA_SIN_INVISIBLES, CAPTURA_0_2_14, CAPTURA_BUCLE, CAPTURA_SIN_CERRAR, CAPTURA_0_2_16 } from "./fixtures-toolcalls.mjs";
 
 /* Se extrae la función tal cual está en server.mjs —copiada, no reimplementada—
    para que la prueba falle si el servidor deja de soportarlo. */
@@ -16,6 +16,12 @@ const i2 = s.indexOf("function partesDelSse");
 const j2 = s.indexOf("\n/**", i2 + 10);
 writeFileSync("/tmp/jpcode-pds.cjs", `${s.slice(i2, j2)}\nmodule.exports={partesDelSse};`);
 const { partesDelSse } = require_("/tmp/jpcode-pds.cjs");
+
+/* Y la decision de que se le manda al motor, que es donde estaba el fallo. */
+const i3 = s.indexOf("function respuestaParaElMotor");
+const j3 = s.indexOf("\n/**", i3 + 10);
+writeFileSync("/tmp/jpcode-rpm.cjs", s.slice(i3, j3) + "\nmodule.exports={respuestaParaElMotor};");
+const { respuestaParaElMotor } = require_("/tmp/jpcode-rpm.cjs");
 
 let fallos = 0;
 const check = (nombre, ok, detalle = "") => {
@@ -194,6 +200,39 @@ console.log("\nLa captura de 0.2.15: la llamada sin cerrar que se veía en crudo
       r.contentLimpio.startsWith("Primero reviso") &&
       !r.contentLimpio.includes("2>nul"),
     JSON.stringify(r.contentLimpio),
+  );
+}
+
+/* ---- 0.2.16: el caso que hacia inutil toda la limpieza del texto ---- */
+console.log("\nLa captura de 0.2.16: tool call nativa Y XML en el texto a la vez:");
+{
+  /* SSE como el que manda Zen: un tool_call nativo con nombre en un trozo de
+     delta, y el XML en el contenido. Las dos cosas a la vez, que es lo que
+     hacia el modelo. */
+  const trozo = (obj) => "data: " + JSON.stringify(obj) + "\n\n";
+  const argumentos = JSON.stringify({ pattern: "C:/x" });
+  const sse =
+    trozo({ id: "x", choices: [{ delta: { content: CAPTURA_0_2_16 } }] }) +
+    trozo({ id: "x", choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "glob", arguments: "" } }] } }] }) +
+    trozo({ id: "x", choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: argumentos } }] } }] }) +
+    trozo({ id: "x", choices: [{ delta: {}, finish_reason: "tool_calls" }] }) +
+    "data: [DONE]\n\n";
+
+  const partes = partesDelSse(sse);
+  check(
+    "el SSE trae la tool call nativa",
+    partes.toolCalls.length === 1 && partes.toolCalls[0].function.name === "glob",
+    JSON.stringify(partes.toolCalls.map((t) => t.function.name)),
+  );
+
+  const { toolCalls: tcTexto, contentLimpio } = E(partes.content);
+  const r = respuestaParaElMotor(partes, tcTexto, contentLimpio);
+
+  check("se ejecuta la llamada nativa", r.toolCalls.length === 1 && r.toolCalls[0].function.name === "glob");
+  check(
+    "y el texto que se ve NO lleva el XML",
+    !/[<>]/.test(r.contenido) && !/invoke|tool_call|pattern|clash|minimax|Desktop/.test(r.contenido),
+    JSON.stringify(r.contenido),
   );
 }
 

@@ -57,3 +57,18 @@ export const CAPTURA_BUCLE =
 export const CAPTURA_SIN_CERRAR =
   'Primero reviso qué hay en el Escritorio para ver si ya existe la carpeta.][minimax>[' +
   '<invoke name="cmd"><command>cmd /c dir /b "%USERPROFILE%\\OneDrive\\Desktop" 2>nul || echo "no oneDrive desktop"';
+
+
+/* ---- 0.2.16: el texto literal de la pantalla, con el arreglo YA puesto ----
+ *
+ * Esto sale de lo que el usuario vio en 0.2.16, y es el caso que hizo
+ * inútil la limpieza del texto: el modelo manda la llamada nativa Y el XML
+ * repetido en el texto a la vez. Transcrito de la consola, no de la foto,
+ * para poder comprobarlo. */
+export const CAPTURA_0_2_16 =
+  "Voy a revisar primero qué hay en tu Escritorio para ver si ya existe algún proyecto relacionado.]" +
+  "[minimax>[{<\u200Btool_call>[\n" +
+  "][minimax>[<invoke\n" +
+  'name="glob">][minimax>[<pattern>C:\\Users\\Usuario\\Desktop\\*}]][minimax>[{</pattern>][minimax>[{</invoke\n' +
+  'name="glob">][minimax>[<pattern>C:\\Users\\Usuario\\Desktop\\*\\**\\clash*>][minimax>[{</pattern>][minimax>[{</invoke>\n' +
+  "][minimax>[{</\u200Btool_call>";

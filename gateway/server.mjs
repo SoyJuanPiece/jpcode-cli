@@ -383,6 +383,30 @@ function partesDelSse(sse) {
  *
  * Devuelve { toolCalls, contentLimpio } donde toolCalls tiene el formato OpenAI.
  */
+/**
+ * Qué se le manda al motor de verdad: qué llamadas se ejecutan y qué texto se ve.
+ *
+ * Existe solo para poder probarla. El bug que hacia estaba en una línea suelta
+ * dentro del handler de streaming, así que era imposible comprobarla sin levantar
+ * el servidor entero:
+ *
+ *     contenidoFinal = partes.toolCalls.length ? partes.content : contentLimpio
+ *
+ * O sea: SI el modelo mandaba alguna tool_call nativa, se enseñaba el texto
+ * CRUDO. Y el modelo de Space Bunny manda las dos cosas a la vez — la llamada
+ * nativa y el XML repetido en el texto—, así que el XML se colaba en pantalla
+ * por mucho que la limpieza funcionase. Es lo que se veía en la captura de
+ * 0.2.16 con el arreglo ya puesto.
+ *
+ * El texto se limpia SIEMPRE. Da igual de dónde salgan las llamadas.
+ */
+function respuestaParaElMotor(partes, tcTexto, contentLimpio) {
+  return {
+    toolCalls: partes.toolCalls.length ? partes.toolCalls : tcTexto,
+    contenido: contentLimpio,
+  };
+}
+
 function extraerToolCallsDeTexto(content) {
   /* Topes. Un turno normal son unas pocas tool calls; el alto esta para que un
      modelo en bucle no convierta el extractor en un hoyo de memoria. El cuerpo de
@@ -900,10 +924,11 @@ createServer(async (req, res) => {
         const sseText = await upstream.text();
         const partes = partesDelSse(sseText);
 
-        // Si el stream ya trajo tool_calls reales úsalos; si no, busca en el texto
+        // Si el stream ya trajo tool_calls reales úsalos; si no, busca en el texto.
+        // El texto se limpia siempre: ver respuestaParaElMotor().
         const { toolCalls: tcTexto, contentLimpio } = extraerToolCallsDeTexto(partes.content);
-        const toolCallsFinales = partes.toolCalls.length ? partes.toolCalls : tcTexto;
-        const contenidoFinal  = partes.toolCalls.length ? partes.content   : contentLimpio;
+        const { toolCalls: toolCallsFinales, contenido: contenidoFinal } =
+          respuestaParaElMotor(partes, tcTexto, contentLimpio);
 
         res.writeHead(200, {
           "Content-Type": "text/event-stream; charset=utf-8",
