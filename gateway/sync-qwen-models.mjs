@@ -96,7 +96,7 @@ for (const m of lista) {
   if (prov !== "__zen" && soloZen) continue;
   if (ZEN_PLAN.has(prov) && !conZenPlan) continue;
   if (!grupos.has(prov)) grupos.set(prov, []);
-  grupos.get(prov).push({ id, titulo, protocolo: m.x_opencode_protocol || "openai" });
+  grupos.get(prov).push({ id, titulo, protocolo: m.x_opencode_protocol || "openai", free: m.x_opencode_free });
 }
 const ordenados = [...grupos.keys()].sort((a, b) => {
   const ia = ORDEN.indexOf(a), ib = ORDEN.indexOf(b);
@@ -108,11 +108,20 @@ const ordenados = [...grupos.keys()].sort((a, b) => {
 const entrada = [];
 for (const prov of ordenados) {
   const etiqueta = nombres[prov] || prov;
-  for (const { id, titulo, protocolo } of grupos.get(prov)) {
+  for (const { id, titulo, protocolo, free } of grupos.get(prov)) {
+    const esGratis = prov === "__zen" ? true : free;
+    const tag = (esGratis === true && prov !== "__zen") ? " [Gratis]" : (esGratis === false && prov !== "__zen") ? " [De pago]" : "";
+    const desc = prov === "__zen"
+      ? "Gratis, sin cuenta"
+      : esGratis === true
+        ? `Gratis (${protocolo})`
+        : esGratis === false
+          ? `De pago (${protocolo})`
+          : `Conectado en el gateway (${protocolo})`;
     entrada.push({
       id,
-      name: `${titulo} · ${etiqueta}`,
-      description: prov === "__zen" ? "Gratis, sin cuenta" : `Conectado en el gateway (${protocolo})`,
+      name: `${titulo}${tag} · ${etiqueta}`,
+      description: desc,
       baseUrl: BASE,
       envKey: ENVKEY,
     });

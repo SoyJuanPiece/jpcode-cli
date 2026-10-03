@@ -98,6 +98,24 @@ for (const f of candidatos) {
   break;
 }
 
+/* Parche 2: Habilitar Ctrl+V en Windows.
+   Qwen Code excluía ctrl:true en Windows:
+     ["pasteClipboardImage"]:process.platform==="win32"?[{key:"v",command:true},{key:"v",meta:true}]:[{key:"v",ctrl:true},{key:"v",command:true}]
+   dejando Ctrl+V inútil en PowerShell / Windows Terminal. Habilitamos ctrl:true en todas las plataformas. */
+const KEY_VIEJO = '["pasteClipboardImage"]:process.platform==="win32"?[{key:"v",command:true},{key:"v",meta:true}]:[{key:"v",ctrl:true},{key:"v",command:true}]';
+const KEY_NUEVO = '["pasteClipboardImage"]:[{key:"v",ctrl:true},{key:"v",command:true},{key:"v",meta:true}]';
+
+for (const f of candidatos) {
+  const ruta = join(chunks, f);
+  const s = readFileSync(ruta, "utf8");
+  if (s.includes(KEY_VIEJO)) {
+    writeFileSync(ruta, s.replace(KEY_VIEJO, KEY_NUEVO));
+    console.log(`• keybinding pasteClipboardImage: habilitado Ctrl+V en Windows (${f})`);
+  } else if (s.includes(KEY_NUEVO)) {
+    console.log(`• keybinding pasteClipboardImage: ya soportaba Ctrl+V (${f})`);
+  }
+}
+
 if (hecho) {
   console.log("\n✅ Listo. Si el terminal no tiene portapapeles, el aviso ahora lo dice");
   console.log("   y explica el atajo: arrastra el fichero al terminal o pega su ruta.");

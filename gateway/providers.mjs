@@ -337,12 +337,38 @@ export async function listar({ todos = false, modelo = false, cat = null, cfg = 
   return fuera;
 }
 
+/**
+ * Identifica si un modelo de proveedor es gratuito (sin coste por token).
+ * Los gratis de Zen lo son siempre. En Z.AI/Zhipu son glm-4.7-flash, glm-4.5-flash y glm-4.6v-flash.
+ * En otros proveedores, si cost.input === 0 && cost.output === 0 (salvo en planes de suscripción).
+ */
+export function esModeloGratis(provId, modelId, modelObj) {
+  const mid = String(modelId || "").toLowerCase();
+  const pid = String(provId || "").toLowerCase();
+  if (pid === "__zen" || mid.includes("-free") || mid.includes("free-") || mid.includes("/free")) return true;
+  if (pid.includes("zai") || pid.includes("zhipu")) {
+    if (mid === "glm-4.7-flash" || mid === "glm-4.5-flash" || mid === "glm-4.6v-flash") return true;
+    if (mid.includes("4.7-flash") || mid.includes("4.5-flash") || mid.includes("4.6v-flash")) return true;
+    return false;
+  }
+  if (modelObj?.cost && modelObj.cost.input === 0 && modelObj.cost.output === 0) {
+    if (!pid.includes("plan")) return true;
+  }
+  return false;
+}
+
 /** Todos los modelos de los proveedores usables, en formato `/v1/models`. */
 export async function modelos({ todos = false, cat = null, cfg = null } = {}) {
   const lista = await listar({ todos, modelo: true, cat, cfg });
   const salida = [];
   for (const p of lista) {
-    for (const m of p.models || []) {
+    const mods = [...(p.models || [])];
+    mods.sort((a, b) => {
+      const ga = esModeloGratis(p.id, a.id, a) ? 1 : 0;
+      const gb = esModeloGratis(p.id, b.id, b) ? 1 : 0;
+      return gb - ga;
+    });
+    for (const m of mods) {
       salida.push({
         id: `${p.id}/${m.id}`,
         object: "model",
@@ -351,6 +377,7 @@ export async function modelos({ todos = false, cat = null, cfg = null } = {}) {
         name: m.name,
         x_opencode_provider: p.id,
         x_opencode_protocol: p.protocolo,
+        x_opencode_free: esModeloGratis(p.id, m.id, m),
         ...(m.limit ? { x_opencode_limit: m.limit } : {}),
       });
     }

@@ -28,7 +28,7 @@ if (!process.env.OPENCODE_API_KEY) {
   } catch { /* tier anónimo */ }
 }
 
-const { catalogo, config, baseURL, protocoloDe, NO_SOPORTADOS } = await import("./providers.mjs");
+const { catalogo, config, baseURL, protocoloDe, NO_SOPORTADOS, esModeloGratis } = await import("./providers.mjs");
 
 /* ---------- paquete de Qwen ---------- */
 function paqueteQwen() {
@@ -82,10 +82,18 @@ for (const [id, prov] of Object.entries(cat)) {
     protocol,
     baseUrl: base,
     envKey: env,
-    // Unos pocos modelos de referencia (models.dev). Al conectar, los que
-    // soportan discovery los refrescan del propio endpoint ({baseUrl}/models);
+    // Modelos de referencia: ordenados con los gratis primero (glm-4.7-flash, glm-4.5-flash, etc.).
+    // Al conectar, los que soportan discovery los refrescan del propio endpoint ({baseUrl}/models);
     // si falla, se quedan estos.
-    models: Object.keys(prov.models || {}).slice(0, 8).map((m) => ({ id: m })),
+    models: (() => {
+      const keys = Object.keys(prov.models || {});
+      keys.sort((a, b) => {
+        const ga = esModeloGratis(id, a, prov.models?.[a]) ? 1 : 0;
+        const gb = esModeloGratis(id, b, prov.models?.[b]) ? 1 : 0;
+        return gb - ga;
+      });
+      return keys.slice(0, 10).map((m) => ({ id: m }));
+    })(),
     modelsEditable: true,
     // Descubrir en vivo solo con protocolo openai: `discoverProviderModels`
     // manda `Authorization: Bearer`, que es lo que esperan estos endpoints.
@@ -121,6 +129,15 @@ let hecho = false;
 for (const f of ficheros) {
   let s = readFileSync(f, "utf8");
   if (!s.includes("var ALL_PROVIDERS=[")) continue;
+
+  // Actualizar zaiProvider nativo con los modelos gratis (glm-4.7-flash, glm-4.5-flash) primero
+  const zaiViejo = 'models:[{id:"GLM-5.2",contextWindowSize:1e6,enableThinking:true},{id:"GLM-5.1",contextWindowSize:204800,enableThinking:true},{id:"GLM-5",contextWindowSize:204800},{id:"GLM-5-Turbo",contextWindowSize:204800}]';
+  const zaiNuevo = 'models:[{id:"glm-4.7-flash",contextWindowSize:128000,enableThinking:true},{id:"glm-4.5-flash",contextWindowSize:128000,enableThinking:true},{id:"glm-4.6v-flash",contextWindowSize:128000},{id:"GLM-5.3",contextWindowSize:204800,enableThinking:true},{id:"GLM-5.2",contextWindowSize:1e6,enableThinking:true},{id:"GLM-5.1",contextWindowSize:204800,enableThinking:true},{id:"GLM-5",contextWindowSize:204800},{id:"GLM-5-Turbo",contextWindowSize:204800}]';
+  if (s.includes(zaiViejo)) {
+    s = s.replace(zaiViejo, zaiNuevo);
+    console.log(`• zaiProvider nativo: modelos gratis (glm-4.7-flash, glm-4.5-flash) inyectados (${f})`);
+  }
+
   const yaEstaba = s.includes(MARCA);
   if (!yaEstaba && !s.includes("customProvider];")) continue;
 

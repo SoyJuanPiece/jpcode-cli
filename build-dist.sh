@@ -45,6 +45,14 @@ git archive HEAD | tar -x -C "$TRABAJO"
 if [ ! -f "$AQUI/engine/cli-entry.js" ]; then
   echo "→ falta el motor; lo traigo con vendor-engine.sh"
   bash "$AQUI/vendor-engine.sh" >/dev/null || { echo "✗ no pude traer el motor" >&2; exit 1; }
+else
+  echo "→ actualizando parches sobre el motor en engine/…"
+  for p in patch-jpcode-brand patch-jpcode-clipboard patch-jpcode-image-watch patch-jpcode-render; do
+    QWEN_PKG="$AQUI/engine" node "$AQUI/$p.mjs" >/dev/null 2>&1 || true
+  done
+  for p in patch-qwen-search patch-qwen-providers patch-qwen-auth patch-qwen-connect patch-qwen-model-sections patch-qwen-discover; do
+    QWEN_PKG="$AQUI/engine" node "$AQUI/gateway/$p.mjs" >/dev/null 2>&1 || true
+  done
 fi
 tar -cf - -C "$AQUI" engine | tar -xf - -C "$TRABAJO"
 echo "→ motor incluido ($(du -sh "$TRABAJO/engine" | cut -f1), $(find "$TRABAJO/engine" -type f | wc -l) ficheros)"
