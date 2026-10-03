@@ -563,6 +563,16 @@ function extraerToolCallsDeTexto(content) {
     while ((tm = tagRe.exec(cuerpo)) !== null) {
       args[tm[1]] = tm[2].replace(/\s+/g, " ").trim();
     }
+    /* a2) <parameter name="pattern">valor</parameter>
+     *
+     * Formato visto en 0.2.20. El nombre va en el atributo en vez de ser la
+     * propia etiqueta, asi que el de arriba no lo pilla y la llamada salia sin
+     * argumentos —o directamente sin convertirse. */
+    const paramRe = /<parameter\s+name\s*=\s*["']?([A-Za-z0-9_.-]+)["']?\s*>([\s\S]*?)<\/parameter>/gi;
+    let pm2;
+    while ((pm2 = paramRe.exec(cuerpo)) !== null) {
+      args[pm2[1]] = pm2[2].replace(/\s+/g, " ").trim();
+    }
     // b) pares sueltos: , "pattern": "C:/x"
     const parRe = /,\s*"([^"]+)"\s*:\s*(?:"([^"]*)"|([\d.+-]+(?:\.\d+)?))/g;
     let pm;

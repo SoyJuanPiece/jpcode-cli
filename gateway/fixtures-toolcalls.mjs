@@ -72,3 +72,17 @@ export const CAPTURA_0_2_16 =
   'name="glob">][minimax>[<pattern>C:\\Users\\Usuario\\Desktop\\*}]][minimax>[{</pattern>][minimax>[{</invoke\n' +
   'name="glob">][minimax>[<pattern>C:\\Users\\Usuario\\Desktop\\*\\**\\clash*>][minimax>[{</pattern>][minimax>[{</invoke>\n' +
   "][minimax>[{</\u200Btool_call>";
+
+
+/* ---- 0.2.20: otro formato nuevo, este con <parameter name="..."> ----
+ *
+ * Antes los argumentos venían como <pattern>valor</pattern>. Ahora el modelo
+ * escribe <parameter name="pattern">valor</parameter>, y además se cuela un
+ * <globe_placeholder /> suelto que no es una herramienta. */
+export const CAPTURA_0_2_20 =
+  "Voy a revisar primero qué hay en tu Escritorio por si ya existe una carpeta del clan.]" +
+  "[minimax>[{<\u200Btool_call>[\n" +
+  "<globe_placeholder />\n" +
+  '<invoke name="glob">\n<parameter name="pattern">C:\\Users\\Usuario\\Desktop\\* **</parameter>\n</invoke>\n' +
+  '<invoke name="glob">\n<parameter name="pattern">C:\\Users\\Usuario\\Desktop\\*\\**</parameter>\n</invoke>\n' +
+  "][minimax>[{</\u200Btool_call>";

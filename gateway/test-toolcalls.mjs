@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { CAPTURA_0_2_13, CAPTURA_SIN_INVISIBLES, CAPTURA_0_2_14, CAPTURA_BUCLE, CAPTURA_SIN_CERRAR, CAPTURA_0_2_16 } from "./fixtures-toolcalls.mjs";
+import { CAPTURA_0_2_13, CAPTURA_SIN_INVISIBLES, CAPTURA_0_2_14, CAPTURA_BUCLE, CAPTURA_SIN_CERRAR, CAPTURA_0_2_16, CAPTURA_0_2_20 } from "./fixtures-toolcalls.mjs";
 
 /* Se extrae la función tal cual está en server.mjs —copiada, no reimplementada—
    para que la prueba falle si el servidor deja de soportarlo. */
@@ -233,6 +233,26 @@ console.log("\nLa captura de 0.2.16: tool call nativa Y XML en el texto a la vez
     "y el texto que se ve NO lleva el XML",
     !/[<>]/.test(r.contenido) && !/invoke|tool_call|pattern|clash|minimax|Desktop/.test(r.contenido),
     JSON.stringify(r.contenido),
+  );
+}
+
+/* ---- 0.2.20: <parameter name="x">, un formato más nuevo ---- */
+console.log("\nLa captura de 0.2.20: los argumentos vienen en <parameter name=...>:");
+{
+  const r = E(CAPTURA_0_2_20);
+  const patrones = r.toolCalls.map((t) => JSON.parse(t.function.arguments).pattern);
+  check(
+    "saca las dos llamadas a glob",
+    r.toolCalls.length === 2 &&
+      r.toolCalls.every((t) => t.function.name === "glob") &&
+      patrones[0] === "C:\\Users\\Usuario\\Desktop\\* **" &&
+      patrones[1] === "C:\\Users\\Usuario\\Desktop\\*\\**",
+    JSON.stringify(patrones),
+  );
+  check(
+    "y el texto visible es solo la frase",
+    !/[<>]/.test(r.contentLimpio) && !/invoke|parameter|placeholder|Desktop/.test(r.contentLimpio),
+    JSON.stringify(r.contentLimpio),
   );
 }
 
