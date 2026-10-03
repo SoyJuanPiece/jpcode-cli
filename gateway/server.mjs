@@ -924,6 +924,25 @@ createServer(async (req, res) => {
         const sseText = await upstream.text();
         const partes = partesDelSse(sseText);
 
+        /* Volcar lo que contesta el modelo, tal cual. Esto es lo que evita ir
+           adivinando: varias veces se ha intentado arreglar un formato a ojo,
+           desde una captura de pantalla, y el texto transcrito no era el de
+           verdad — con los caracteres de ancho cero y los cortes de linea
+           perdidos. Con JPCODE_DUMP_TEXTO=camino.txt se guarda el literal de
+           cada turno y ya no hay que pedir capturas.
+
+           Solo escribe si la variable esta puesta. */
+        if (process.env.JPCODE_DUMP_TEXTO) {
+          try {
+            appendFileSync(
+              process.env.JPCODE_DUMP_TEXTO,
+              `\n===== ${new Date().toISOString()} · ${model} · ` +
+                `${partes.toolCalls.length} tool_calls nativas =====\n` +
+                JSON.stringify(partes.content) + "\n",
+            );
+          } catch { /* que el volcado nunca rompa la conversación */ }
+        }
+
         // Si el stream ya trajo tool_calls reales úsalos; si no, busca en el texto.
         // El texto se limpia siempre: ver respuestaParaElMotor().
         const { toolCalls: tcTexto, contentLimpio } = extraerToolCallsDeTexto(partes.content);
@@ -949,8 +968,16 @@ createServer(async (req, res) => {
         };
 
         if (toolCallsFinales.length) {
-          // Cabecera del mensaje con tool calls
-          sse({ role: "assistant", content: null });
+          /* El texto del modelo va ANTES de las llamadas, no en `content: null`.
+           *
+           * El modelo dice cosas ("Voy a revisar primero qué hay en tu
+           * Escritorio…") y luego pide la herramienta. Mandando `content: null`
+           * esa frase se perdia: el motor ejecutaba la herramienta sin que se
+           * viera por que, y parecia que hacia caso omiso. El protocolo de
+           * OpenAI admite las dos cosas en la misma respuesta. */
+          const trozos = (contenidoFinal || "").match(/[\s\S]{1,80}/g) || [];
+          sse({ role: "assistant", content: trozos.length ? trozos[0] : null });
+          for (let i = 1; i < trozos.length; i++) sse({ content: trozos[i] });
           for (let i = 0; i < toolCallsFinales.length; i++) {
             const tc = toolCallsFinales[i];
             // Primer chunk: id + nombre
