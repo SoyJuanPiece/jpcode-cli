@@ -546,3 +546,23 @@ cajas, barra de estado), no su código ni su marca.
 
 - Logo ASCII definitivo con tu diseño.
 - Completar el rebranding de la UI (menús, `/help`, `/status`).
+
+## ⚠️ Reglas críticas para Asistentes de IA y Desarrolladores
+
+Si eres una IA o un desarrollador modificando este repositorio, **debes seguir estrictamente estas reglas** para evitar romper funcionalidades existentes:
+
+1. **Parches del motor (`patch-jpcode-*.mjs`)**:
+   - **Cuidado con las constantes en bucles**: Al modificar bucles de streaming (como `for await (const rawChunk of stream)`), NUNCA intentes reasignar variables declaradas como `const`. Usa una nueva constante local (`const chunk = ...`).
+   - **Idempotencia y sintaxis**: Todos los scripts de parche sobre `engine/chunks/` deben ser idempotentes y pasar la comprobación de sintaxis `node --check <chunk>`.
+   - **Registro de parches**: Todo parche nuevo debe añadirse al bucle de parches en `vendor-engine.sh`, `build-dist.sh` y al arreglo `"files"` de `package.json`.
+
+2. **Parser de herramientas MiniMax / OpenCode Zen (`patch-jpcode-minimax-plan.mjs` y `gateway/server.mjs`)**:
+   - **Soporte multiformato de XML**: Los modelos gratuitos de Zen/MiniMax emiten llamadas a herramientas incrustadas en texto XML (`<tool_call>`, `<invoke>`, etc.) y caracteres invisibles de ancho cero (`\u200B`).
+   - **No remover la limpieza de texto**: Mantén siempre la función de extracción y limpieza (`extraerToolCallsDeTexto`) para evitar que basura de protocolo como `]<]minimax>[` o XML crudo se impriman en la pantalla del usuario.
+
+3. **Modo Plan y Flujo de Interacción**:
+   - El `modo plan` opera paso a paso de forma deliberada para permitir inspección segura del espacio de trabajo. No alteres los controles de renderizado (`useTerminalBuffer`) ni modifiques la pausa entre turnos que espera interacción del usuario.
+
+4. **Hermetismo en Pruebas y Publicación**:
+   - Antes de publicar una versión, ejecuta `bash build-dist.sh` o `bash publish-npm.sh --dry-run` para verificar que las 227+ aserciones de prueba pasen correctamente.
+
