@@ -117,7 +117,9 @@ if (antes.includes(MARCADOR)) {
 
 const contenidoUZ5 = readFileSync(ruta, "utf8");
 const MARCADOR3 = "JPCODE_MINIMAX_STREAM_LOOP";
-const ANCLA_LOOP = "reportOpenAiChunk(telemetryAttempt,chunk);";
+const ANCLA_LOOP = "for await(const chunk of stream){";
+const HOOK_CHUNK = "for await(const rawChunk of stream){/* JPCODE_MINIMAX_STREAM_LOOP */const chunk=this.config.provider?.postProcessStreamChunk?.(rawChunk)??rawChunk;";
+
 const ocurrencias = (contenidoUZ5.match(new RegExp(ANCLA_LOOP.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
 
 if (contenidoUZ5.includes(MARCADOR3)) {
@@ -125,7 +127,6 @@ if (contenidoUZ5.includes(MARCADOR3)) {
 } else if (ocurrencias !== 1) {
   console.warn(`  ⚠️  ${CHUNK}: se encontraron ${ocurrencias} ocurrencias de "${ANCLA_LOOP}".`);
 } else {
-  const HOOK_CHUNK = `${ANCLA_LOOP}/* ${MARCADOR3} */chunk=this.config.provider?.postProcessStreamChunk?.(chunk)??chunk;`;
   const despues2 = contenidoUZ5.replace(ANCLA_LOOP, HOOK_CHUNK);
   writeFileSync(ruta, despues2);
   console.log(`• ${CHUNK}: hook de stream instalado en processStreamWithLogging`);
