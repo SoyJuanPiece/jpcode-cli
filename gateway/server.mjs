@@ -348,6 +348,65 @@ function partesDelSse(sse) {
 }
 
 /**
+ * Extrae tool calls que el modelo emitió como texto plano (formato MiniMax u otros).
+ * MiniMax escribe sus tokens de herramienta como texto cuando `tool_calls` no está
+ * disponible en el stream: `][minimax>[<tool_call><invoke name="glob" ...>`.
+ * Devuelve { toolCalls, contentLimpio } donde toolCalls tiene el formato OpenAI.
+ */
+function extraerToolCallsDeTexto(content) {
+  if (!content) return { toolCalls: [], contentLimpio: "" };
+  // Detectar si hay intento de tool call en el texto
+  const tieneInvoke = content.includes("<invoke") || content.includes("tool_call");
+  if (!tieneInvoke) return { toolCalls: [], contentLimpio: content };
+
+  // Limpiar tokens especiales de MiniMax (][minimax>[, ][minimax][, etc.)
+  let limpio = content
+    .replace(/\]\[minimax\>\[/g, "")
+    .replace(/\]\[minimax\]\[/g, "")
+    .replace(/\]\[minimax\>/g, "");
+
+  const toolCalls = [];
+  let idx = 0;
+
+  // Patrón: <invoke name="tool_name", "key": "value", ...>
+  // o      <invoke name="tool_name">
+  const invokeRe = /<invoke\s+name="([^"]+)"([^>]*)>/g;
+  let m;
+  const vistos = new Set();
+  while ((m = invokeRe.exec(limpio)) !== null) {
+    const nombre = m[1].trim();
+    if (!nombre || vistos.has(nombre + m[2])) continue;
+    vistos.add(nombre + m[2]);
+
+    const rest = m[2] || "";
+    const args = {};
+    // Parsear args inline: , "key": "value"
+    const argRe = /,\s*"([^"]+)"\s*:\s*(?:"([^"]*)"|([\d.+-]+(?:\.\d+)?))/g;
+    let am;
+    while ((am = argRe.exec(rest)) !== null) {
+      if (am[2] !== undefined) args[am[1]] = am[2];
+      else if (am[3] !== undefined) args[am[1]] = Number(am[3]);
+    }
+
+    toolCalls.push({
+      id: `call_${nombre}_${Date.now().toString(36)}_${idx++}`,
+      type: "function",
+      function: { name: nombre, arguments: JSON.stringify(args) },
+    });
+  }
+
+  // Quitar los bloques de tool_call e invoke del texto visible
+  const sinTags = limpio
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, "")
+    .replace(/<invoke[^>]*>[\s\S]*?<\/invoke>/g, "")
+    .replace(/<\/?invoke[^>]*>/g, "")
+    .replace(/<\/?tool_call>/g, "")
+    .trim();
+
+  return { toolCalls, contentLimpio: sinTags };
+}
+
+/**
  * Claude Code solo sabe pedir modelos `claude-*`. Aquí se traducen a los gratis
  * de Zen: los "pequeños/rápidos" (haiku, mini…) al más ligero, el resto al
  * modelo por defecto. Se puede forzar con CLAUDE_MODEL / CLAUDE_SMALL_MODEL.
@@ -630,12 +689,15 @@ createServer(async (req, res) => {
       const model = objetivo.zen;
       const quiereStream = Boolean(body.stream);
       let payload = { ...body, model };
-      /* El tier gratis NO emite tool calls —es la receta, no un fallo: ver
-         forced-tools.mjs— y el motor usa llamadas forradas para todo lo que va por
-         `generateJson`, empezando por el clasificador del modo auto. Aquí se
-         traducen a JSON en texto y, al volver, se fabrica el `tool_calls` que el
-         cliente esperaba. Solo sin streaming: es lo único que el motor usa para
-         pedir JSON, y el camino con stream se queda byte a byte como estaba. */
+      /* El tier gratis NO emite tool calls de forma nativa. Para las llamadas
+         de `generateJson` (clasificador del modo auto, modelo rápido, etc.) el
+         camino sin streaming usa `forzarComoJson` + `conToolCall`. Para el chat
+         interactivo (streaming) el modelo MiniMax intenta llamar herramientas
+         escribiendo sus tokens especiales como texto: `][minimax>[<tool_call>`.
+         Eso llegaba al cliente como contenido de texto y Qwen Code nunca ejecutaba
+         nada. La solución: bufferizar el SSE, parsear con `partesDelSse` +
+         `extraerToolCallsDeTexto` y re-emitir SSE limpio con `delta.tool_calls`
+         reales que el motor sí sabe ejecutar. */
       let forzado = null;
       if (!quiereStream) ({ body: payload, forzado } = forzarComoJson(payload));
       delete payload.stream;
@@ -646,7 +708,58 @@ createServer(async (req, res) => {
         return;
       }
       if (quiereStream) {
-        await pipeSse(res, upstream);
+        // Bufferizar el SSE para poder detectar y convertir tool calls en texto
+        const sseText = await upstream.text();
+        const partes = partesDelSse(sseText);
+
+        // Si el stream ya trajo tool_calls reales úsalos; si no, busca en el texto
+        const { toolCalls: tcTexto, contentLimpio } = extraerToolCallsDeTexto(partes.content);
+        const toolCallsFinales = partes.toolCalls.length ? partes.toolCalls : tcTexto;
+        const contenidoFinal  = partes.toolCalls.length ? partes.content   : contentLimpio;
+
+        res.writeHead(200, {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-store",
+          Connection: "keep-alive",
+          "X-Accel-Buffering": "no",
+          ...corsHeaders(),
+        });
+
+        const chatId = partes.id || ocId("chatcmpl_");
+        const ts     = Math.floor(Date.now() / 1000);
+        const sse    = (delta, finish_reason = null) => {
+          const obj = {
+            id: chatId, object: "chat.completion.chunk", created: ts, model,
+            choices: [{ index: 0, delta, ...(finish_reason ? { finish_reason } : {}) }],
+          };
+          res.write(`data: ${JSON.stringify(obj)}\n\n`);
+        };
+
+        if (toolCallsFinales.length) {
+          // Cabecera del mensaje con tool calls
+          sse({ role: "assistant", content: null });
+          for (let i = 0; i < toolCallsFinales.length; i++) {
+            const tc = toolCallsFinales[i];
+            // Primer chunk: id + nombre
+            sse({ tool_calls: [{ index: i, id: tc.id, type: "function", function: { name: tc.function.name, arguments: "" } }] });
+            // Segundo chunk: argumentos
+            sse({ tool_calls: [{ index: i, function: { arguments: tc.function.arguments } }] });
+          }
+          sse({}, "tool_calls");
+        } else {
+          // Respuesta de texto normal: emitir en trozos para dar sensación de stream
+          sse({ role: "assistant", content: "" });
+          // Partir por palabras para que el cursor siga avanzando
+          const trozos = (contenidoFinal || "").match(/.{1,80}/gs) || [];
+          for (const t of trozos) sse({ content: t });
+          sse({}, partes.finish || "stop");
+        }
+
+        if (partes.usage) {
+          res.write(`data: ${JSON.stringify({ id: chatId, object: "chat.completion.chunk", created: ts, model, choices: [], usage: partes.usage })}\n\n`);
+        }
+        res.write("data: [DONE]\n\n");
+        res.end();
         return;
       }
       sendJson(res, 200, conToolCall(aFormatoOpenAI(await upstream.text(), model), forzado));

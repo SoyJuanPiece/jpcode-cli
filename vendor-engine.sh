@@ -90,7 +90,7 @@ echo "   y parsea bien"
 
 # Licencia: Apache-2.0 obliga a conservarla y a dejar constancia de los cambios.
 [ -f "$MOTOR/LICENSE" ] || { echo "✗ el motor no trae LICENSE; no lo empaqueto así" >&2; exit 1; }
-cat > "$MOTOR/NOTICE-jpcode.md" <<EOF
+cat > "$MOTOR/NOTICE-jpcode.md" <<'EOF'
 # Aviso sobre el motor incluido en \`engine/\`
 
 Este directorio contiene **Qwen Code $VERSION**, publicado bajo **Apache-2.0**.

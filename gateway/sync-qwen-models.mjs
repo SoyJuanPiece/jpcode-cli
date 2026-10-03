@@ -137,10 +137,9 @@ const esNuestro = (lista) =>
   lista.every((m) => m && (m.envKey === ENVKEY || /^http:\/\/(127\.0\.0\.1|localhost):\d+\/v1\/?$/.test(m.baseUrl || "")));
 for (const k of Object.keys(otros)) if (esNuestro(otros[k])) delete otros[k];
 
-// Los comandos propios (node) no deben pedir permiso cada vez. `permissions.allow`
-// solo se respeta si el modo no es "auto" (en auto manda el clasificador), así que
-// también fijamos el modo por defecto — sin pisar lo que el usuario ya tuviera.
-const allow = [...new Set([...(actual.permissions?.allow || []), "Bash(node *)"])];
+// Quitamos `Bash(node *)` de las reglas automáticas: el motor en Auto Mode saca un
+// aviso gigante advirtiendo que deshabilita esa regla. Sin ella el auto mode no imprime ningún cartel.
+const allow = (actual.permissions?.allow || []).filter((r) => r !== "Bash(node *)");
 
 const ajustes = {
   ...actual,

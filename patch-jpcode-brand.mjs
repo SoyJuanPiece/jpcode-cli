@@ -28,7 +28,7 @@
  * ya lo llama con QWEN_PKG=engine). NO toca marca de Anthropic ni código ajeno:
  * solo renombra y retoca la app que estamos re-marcando.
  */
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
 
@@ -183,6 +183,14 @@ aplicar(TITULO, TITULO_CAMBIOS, 'DEFAULT_WINDOW_TITLE="jpcode"');
 for (const f of TEXTOS) aplicar(f, [["Qwen Code", "jpcode"]], "jpcode");
 aplicar(SPINNER, SPINNER_CAMBIOS, SPINNER_NUEVO);
 aplicar(VERSION, VERSION_CAMBIOS, "JPCODE_CLI_VERSION");
+
+/* Silenciar la advertencia feo-amarilla `Persisted model.baseUrl` cuando cambia el puerto del gateway */
+const candidatoWarning = readdirSync(chunks).find((f) => f.endsWith(".js") && readFileSync(join(chunks, f), "utf8").includes("Persisted model.baseUrl"));
+if (candidatoWarning) {
+  aplicar(candidatoWarning, [
+    ['disambiguationWarning=`Persisted model.baseUrl', 'disambiguationWarning=void 0;let _oldWarn=`Persisted model.baseUrl']
+  ], "disambiguationWarning=void 0");
+}
 
 if (cambios) {
   console.log(`\n✅ jpcode: ${cambios} fichero(s) rebrandeados.`);
