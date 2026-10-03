@@ -1191,6 +1191,24 @@ createServer(async (req, res) => {
         // Diagnóstico: desde dónde llega la petición y si se considera local.
         remote: req.socket.remoteAddress || null,
         trusted: esDelChat(req),
+        /* Qué código está corriendo DE VERDAD. Esto se añadió porque el gateway
+           se queda vivo al cerrar jpcode: al actualizar la versión, si el
+           proceso viejo seguía vivo, se seguía usando el viejo sin que se notase
+           y parecía que el arreglo no funcionaba. Con esta marca se pregunta y
+           ya está.
+           - `tools` = cómo se describen las de relleno
+           - `toolChoice` = qué se manda cuando el cliente no lo dice
+           - `dumpTexto` = si volca el texto literal del modelo
+           - `pid` y `inicio` = qué proceso es este */
+        codigo: {
+          tools: Object.values(DESCRIPCION_FILLER)[0].slice(0, 30),
+          toolChoice: "auto",
+          dumpTexto: Boolean(process.env.JPCODE_DUMP_TEXTO),
+          dump: process.env.JPCODE_DUMP_TEXTO || null,
+          pid: process.pid,
+          inicio: new Date().toISOString(),
+          args: process.argv.slice(2).join(" "),
+        },
       });
       return;
     }
