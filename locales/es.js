@@ -146,11 +146,11 @@ export default {
 
   /* ---- modos ---- */
   "Shell mode": "Modo shell",
-  "YOLO mode": "Modo YOLO",
-  "Auto mode": "Modo auto",
+  "YOLO mode": "Modo automático",
+  "Auto mode": "Modo auto (seguro)",
   "plan mode": "modo plan",
-  "auto-accept edits": "acepta los cambios solo",
-  "Accepting edits": "Aceptando cambios",
+  "auto-accept edits": "aceptar ediciones",
+  "Accepting edits": "Aceptando ediciones",
   "shell command": "comando",
   "Basics:": "Básico:",
   "Components:": "Componentes:",
