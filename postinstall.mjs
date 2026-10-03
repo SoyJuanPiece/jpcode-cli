@@ -80,7 +80,13 @@ const ORIGEN_LOCALES = join(AQUI, "locales");
 if (existsSync(ORIGEN_LOCALES)) {
   const DESTINO_LOCALES = join(JP_HOME, "locales");
   mkdirSync(DESTINO_LOCALES, { recursive: true });
-  for (const f of readdirSync(ORIGEN_LOCALES).filter((f) => f.endsWith(".js"))) {
+  /* El `package.json` va también, y no es opcional: el motor hace `import()` de
+     `~/.jpcode/locales/es.js`, Node ve `export default`, y como no encuentra un
+     paquete declarando el tipo de módulo avisa por consola y dice cuál sería el
+     `package.json` que falta —que resulta ser el de tu carpeta personal, porque
+     `~/.jpcode` no tiene ninguno—. Con este fichero de al lado, carga como ESM y
+     sin decir nada. */
+  for (const f of readdirSync(ORIGEN_LOCALES).filter((f) => f.endsWith(".js") || f === "package.json")) {
     copyFileSync(join(ORIGEN_LOCALES, f), join(DESTINO_LOCALES, f));
   }
   aviso(`catálogo es en ${DESTINO_LOCALES} (se usa si el sistema está en español)`);

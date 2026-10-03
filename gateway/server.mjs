@@ -376,11 +376,10 @@ function extraerToolCallsDeTexto(content) {
   const tieneInvoke = content.includes("<invoke") || content.includes("tool_call");
   if (!tieneInvoke) return { toolCalls: [], contentLimpio: content };
 
-  // Limpiar tokens especiales de MiniMax (][minimax>[, ][minimax][, etc.)
-  let limpio = content
-    .replace(/\]\[minimax\>\[/g, "")
-    .replace(/\]\[minimax\]\[/g, "")
-    .replace(/\]\[minimax\>/g, "");
+  // Limpiar tokens especiales de MiniMax (][minimax>[, ][minimax][, etc.).
+  // Aparecen con y sin carácter de ancho cero y con `>` o `]` detrás de
+  // "minimax", así que se recogen todos de una vez.
+  let limpio = content.replace(/\][\s\u200B-\u200D\u2060]*\[minimax\s*[>\]]?\s*\[?/g, "");
 
   const toolCalls = [];
   let idx = 0;
@@ -439,23 +438,45 @@ function extraerToolCallsDeTexto(content) {
     }
   }
 
-  // --- formato viejo: <invoke name="tool", "k": "v", …> -------------------------
-  const invokeRe = /<invoke\s+name="([^"]+)"([^>]*)>/g;
+  // --- formato <invoke> del modelo --------------------------------------------
+  // MiniMax lo emite de varias maneras según por dónde le corten los tokens
+  // especiales, y todos estos casos se han visto de verdad:
+  //
+  //   <invoke name="glob", "pattern": "C:/x">     (0.2.9, el que se veía antes)
+  //   <invoke name\nglob\n><pattern>C:/x</pattern></invoke>   (0.2.13)
+  //
+  // O sea que el nombre no siempre va con `name="..."` ni en la misma línea, y los
+  // argumentos llegan como etiquetas `<param>valor</param>` en vez de pares
+  // `"k": "v"`. Por eso se busca el nombre de forma tolerante (`name` luego, como
+  // venga, el identificador) y los argumentos en los dos formatos.
+  const invokeRe = /<invoke\s+name\s*=?\s*["']?\s*([A-Za-z0-9_.-]+)/g;
   let m;
   const vistos = new Set();
   while ((m = invokeRe.exec(limpio)) !== null) {
     const nombre = m[1].trim();
-    if (!nombre || vistos.has(nombre + m[2])) continue;
-    vistos.add(nombre + m[2]);
+    if (!nombre || vistos.has(nombre)) continue;
+    vistos.add(nombre);
 
-    const rest = m[2] || "";
+    // El cuerpo de esta invocación va de aquí hasta la siguiente <invoke> o
+    // </invoke>. Es más fiable que un `[^>]*` porque el cierre a veces no viene.
+    const desde = m.index + m[0].length;
+    const resto = limpio.slice(desde);
+    const finRel = resto.search(/<invoke|<\/invoke/i);
+    const cuerpo = finRel === -1 ? resto : resto.slice(0, finRel);
+
     const args = {};
-    // Parsear args inline: , "key": "value"
-    const argRe = /,\s*"([^"]+)"\s*:\s*(?:"([^"]*)"|([\d.+-]+(?:\.\d+)?))/g;
-    let am;
-    while ((am = argRe.exec(rest)) !== null) {
-      if (am[2] !== undefined) args[am[1]] = am[2];
-      else if (am[3] !== undefined) args[am[1]] = Number(am[3]);
+    // a) etiquetas: <pattern>valor</pattern>
+    const tagRe = /<([A-Za-z0-9_.-]+)>([\s\S]*?)<\/\1>/g;
+    let tm;
+    while ((tm = tagRe.exec(cuerpo)) !== null) {
+      args[tm[1]] = tm[2].replace(/\s+/g, " ").trim();
+    }
+    // b) pares sueltos: , "pattern": "C:/x"
+    const parRe = /,\s*"([^"]+)"\s*:\s*(?:"([^"]*)"|([\d.+-]+(?:\.\d+)?))/g;
+    let pm;
+    while ((pm = parRe.exec(cuerpo)) !== null) {
+      if (pm[2] !== undefined) args[pm[1]] = pm[2];
+      else if (pm[3] !== undefined) args[pm[1]] = Number(pm[3]);
     }
 
     toolCalls.push(mk(nombre, args));
@@ -468,6 +489,21 @@ function extraerToolCallsDeTexto(content) {
     .replace(/<\/?invoke[^>]*>/g, "")
     .replace(/<\/??\s*tool_call\s*>/g, "")
     .trim();
+
+  /* Si había bloques de tool call y no se ha sacado ninguna, el formato es otro
+     que no conocemos. Antes esto pasaba en silencio: el bloque desaparecía del
+     texto y el motor no ejecutaba nada, sin error ni rastro, que es como se
+     llegaron a perder horas de tiempo. Ahora se dice, aunque no se pueda hacer
+     nada, para que quede en el registro. */
+  const habiaBloques = /<\s*?\s*tool_call\s*>|<\/??\s*?\s*tool_call\s*>/.test(limpio);
+  if (habiaBloques && toolCalls.length === 0) {
+    console.error(
+      "[jpcode-gateway] el modelo emitió bloques <tool_call> en texto y ninguno se " +
+        "ha podido convertir a tool_calls: el formato ha vuelto a cambiar. Se quita " +
+        "el bloque del texto visible, así que se verá como si el modelo no hubiera " +
+        "intentado usar ninguna herramienta.",
+    );
+  }
 
   return { toolCalls, contentLimpio: sinTags };
 }
