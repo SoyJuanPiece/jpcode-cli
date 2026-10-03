@@ -68,39 +68,45 @@ writeFileSync(
 const { extraerToolCallsDeTexto, partesDelSse } = createRequire(import.meta.url)(tmp);
 
 /* ------------------------------------------------------------------ *
- * Herramientas reales. Los nombres tienen que ser los que el servidor
- * de Zen valida (OFFICIAL_TOOLS), pero aquí van con su esquema de
- * verdad: eso es justo lo que no se estaba probando.
+ * Las 11 herramientas que el servidor de Zen exige ver POR NOMBRE. La primera
+ * version de esta sonda mandaba solo un par y por eso devolvia 403: el servidor
+ * no dice que falte la key, dice "free tier can only be used from within
+ * OpenCode", que parece un problema de autenticacion pero es que la peticion no
+ * lleva las tools que espera.
+ *
+ * Se mandan con su esquema de verdad, que es justo lo que no se estaba probando:
+ * el gateway de serie manda herramientas de relleno que dicen "nunca la llames".
  * ------------------------------------------------------------------ */
-const TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "glob",
-      description: "Busca ficheros que coinciden con un patrón glob dentro de un directorio.",
-      parameters: {
-        type: "object",
-        properties: {
-          pattern: { type: "string", description: "Patrón glob, p.ej. C:/Users/*/Desktop/**" },
-          path: { type: "string", description: "Directorio donde buscar" },
-        },
-        required: ["pattern"],
-      },
+const ESQUEMAS = {
+  bash: { command: "string", description: "Ejecuta un comando de shell" },
+  edit: { file_path: "string", old_string: "string", new_string: "string" },
+  glob: { pattern: "string", path: "string" },
+  grep: { pattern: "string", path: "string" },
+  read: { file_path: "string" },
+  skill: { name: "string", args: "string" },
+  task: { description: "string", prompt: "string", subagent_type: "string" },
+  todowrite: { todos: "array" },
+  webfetch: { url: "string", prompt: "string" },
+  websearch: { query: "string" },
+  write: { file_path: "string", content: "string" },
+};
+
+const TOOLS = Object.entries(ESQUEMAS).map(([name, props]) => ({
+  type: "function",
+  function: {
+    name,
+    description: props.description || `Herramienta ${name}`,
+    parameters: {
+      type: "object",
+      properties: Object.fromEntries(
+        Object.keys(props)
+          .filter((k) => k !== "description")
+          .map((k) => [k, { type: props[k] === "array" ? "array" : "string", description: props[k] }]),
+      ),
+      required: [],
     },
   },
-  {
-    type: "function",
-    function: {
-      name: "read",
-      description: "Lee el contenido de un fichero.",
-      parameters: {
-        type: "object",
-        properties: { file_path: { type: "string", description: "Ruta del fichero" } },
-        required: ["file_path"],
-      },
-    },
-  },
-];
+}));
 
 const MENSAJE = [
   { role: "user", content: "Usa la herramienta glob para listar los ficheros del Escritorio." },

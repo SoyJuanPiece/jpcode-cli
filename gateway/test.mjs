@@ -104,9 +104,14 @@ function startFakeZen() {
           res.end();
           return;
         }
-        // Solo la ruta de Claude Code (/v1/messages con herramientas) usa
-        // tool_choice:"auto"; ahí el modelo "decide" llamar a una herramienta.
-        if (body.tool_choice === "auto") {
+        /* Tool calls solo cuando el cliente mando herramientas DE VERDAD, que es
+           cuando el gateway las pasa con su esquema. Las de relleno van con
+           `properties: {}` vacio; distinguirlas asi evita tener que marcar la
+           peticion. */
+        const hayToolReal = (body.tools || []).some(
+          (t) => Object.keys(t.function?.parameters?.properties || {}).length > 0,
+        );
+        if (body.tool_choice === "auto" && hayToolReal) {
           res.write(`data: ${JSON.stringify({ choices: [{ delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "read", arguments: '{"file_path":"README.md"}' } }] } }] })}\n\n`);
           res.write(`data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: "tool_calls" }], usage: { prompt_tokens: 50, completion_tokens: 9 } })}\n\n`);
           res.write("data: [DONE]\n\n");
@@ -211,8 +216,15 @@ try {
   ok(b.stream === true, "el proxy fuerza stream:true (sin él, 403)");
   const nombres = (b.tools || []).map((t) => t.function?.name);
   ok(OFICIALES.every((n) => nombres.includes(n)), "inyecta las 11 tools oficiales", String(nombres.length));
-  ok((b.tools || []).every((t) => /no está disponible|nunca la llames/i.test(t.function?.description || "") || nombres.length === 0), "las tools de relleno se declaran no usables");
-  ok(b.tool_choice === "none", "pide tool_choice:none para que conteste con texto");
+  /* Estas dos afirmaban lo contrario de lo correcto. Decían que las tools de
+     relleno debían llevar "nunca la llames" y que había que pedir tool_choice
+     "none". Eso era lo que hacía que el modelo escribiera las llamadas en el
+     texto en vez de emitirlas: se lo prohíbamos explícitamente. Medido con el
+     tier público, los 6 modelos que responden emiten tool_calls nativas con
+     tool_choice "auto" y herramientas reales. El parser de texto se queda como
+     red de seguridad, pero ya no es el camino normal. */
+  ok(!(b.tools || []).some((t) => /nunca la llames|no está disponible/i.test(t.function?.description || "")), "las tools de relleno NO le prohíben al modelo usarlas");
+  ok(b.tool_choice === "auto", "pide tool_choice:auto para que el modelo pueda llamar herramientas");
 
   const probeOk = await (await post("/api/probe", { model: "big-pickle" })).json();
   ok(probeOk.ok === true && probeOk.status === 200, "/api/probe marca vivo un modelo gratis");

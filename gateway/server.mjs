@@ -75,6 +75,23 @@ const OFFICIAL_TOOLS = [
   "task", "todowrite", "webfetch", "websearch", "write",
 ];
 
+/* Descripciones de esas tools de relleno. El servidor solo mira los NOMBRES, asi
+   que puede poner lo que quiera; se pone una descripción normal porque el modelo
+   si lee estas, y antes le deciamos que no las llamara nunca. */
+const DESCRIPCION_FILLER = {
+  bash: "Ejecuta un comando de la shell del sistema.",
+  edit: "Edita un fichero sustituyendo un trozo de texto por otro.",
+  glob: "Busca ficheros que coinciden con un patrón.",
+  grep: "Busca un texto dentro de los ficheros.",
+  read: "Lee el contenido de un fichero.",
+  skill: "Carga una habilidad para ampliar lo que sabes hacer.",
+  task: "Lanza a otro agente para una subtarea.",
+  todowrite: "Apunta una lista de tareas pendientes.",
+  webfetch: "Descarga una pagina web.",
+  websearch: "Busca algo en internet.",
+  write: "Escribe un fichero entero.",
+};
+
 /* ================== tu clave del gateway ================== */
 
 const KEY_FILE = join(ROOT, ".api-key");
@@ -178,16 +195,23 @@ function send(res, status, body, type = "application/json; charset=utf-8", extra
 const sendJson = (res, status, obj, extra) => send(res, status, JSON.stringify(obj), "application/json; charset=utf-8", extra);
 
 /**
- * Relleno de tools: el servidor valida los NOMBRES, no los esquemas, así que van
- * vacíos. La descripción deja claro que no se pueden llamar: sin eso, los modelos
- * (big-pickle, mimo, space-bunny) intentan llamarlas y devuelven texto vacío.
+ * Relleno de tools: el servidor valida los NOMBRES, no los esquemas, así que se
+ * anaden las que falten para que acepte la peticion.
+ *
+ * OJO con la descripcion. Antes decia "nunca la llames, responde siempre con
+ * texto", y eso era precisamente lo que hacia que las llamadas salieran como
+ * texto: el modelo leia 11 herramientas que le prohibian usarlas y una decena
+ * mas que si podia usar, y escribia las llamadas en el texto en vez de
+ * emitirlas. Medido: los 7 modelos gratis que responden (big-pickle, los dos
+ * mimo, longcat, los dos nemotron y space-bunny) emitsen tool_calls NATIVAS
+ * cuando se les mandan herramientas de verdad y tool_choice "auto".
  */
 function fillerTools(yaTengo) {
   return OFFICIAL_TOOLS.filter((name) => !yaTengo.has(name)).map((name) => ({
     type: "function",
     function: {
       name,
-      description: `Herramienta de opencode "${name}". No está disponible en esta conversación: nunca la llames, responde siempre con texto.`,
+      description: DESCRIPCION_FILLER[name] || `Herramienta de opencode: ${name}.`,
       parameters: { type: "object", properties: {}, required: [] },
     },
   }));
@@ -233,7 +257,10 @@ function zenBody(payload) {
   const cuerpo = {
     ...payload,
     tools: normalizarTools([...tools, ...fillerTools(have)]),
-    tool_choice: payload.tool_choice ?? "none", // que responda con texto, no llamando tools
+    /* El cliente manda tool_choice "auto" y se respeta. Antes se ponia "none"
+       cuando el cliente no lo mandaba, lo cual hacia que el modelo no
+       llamara a ninguna herramienta y las escribiera en el texto. */
+    tool_choice: payload.tool_choice ?? "auto",
     stream: true,                              // obligatorio: sin esto → 403
   };
   // El tier gratis devuelve "invalid request" con campos que no conoce. Los
