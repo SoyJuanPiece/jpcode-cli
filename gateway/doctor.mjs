@@ -117,15 +117,21 @@ async function estadoGateway(puerto) {
  * proceso, que para eso se lo ha preguntado. */
 async function pingGateway(puerto) {
   try {
+    /* La clave se busca por el MISMO orden que la usa el launcher al arrancar
+     * (bin/jpcode.mjs, asegurarClaveGateway): entorno primero, luego el
+     * fichero. Si aqui se mirara solo el fichero, un gateway arrancado con la
+     * clave del entorno se vería como "de otra instalación" y saltaría un 401
+     * que no existe — el mismo falso positivo que costo una vuelta antes. */
     const clave = process.env.OPENCODE_GATEWAY_KEY ||
+      process.env.CHAT_API_KEY ||
       (existsSync(join(AQUI, "gateway", ".api-key")) ? readFileSync(join(AQUI, "gateway", ".api-key"), "utf8").trim() : "");
     const r = await fetch(`http://127.0.0.1:${puerto}/v1/models`, {
       headers: clave ? { Authorization: `Bearer ${clave}` } : {},
       signal: AbortSignal.timeout(2000),
     });
-    return { status: r.status, body: await r.text() };
+    return { status: r.status, body: await r.text(), clave: Boolean(clave) };
   } catch (err) {
-    return { status: 0, body: "", error: err.message };
+    return { status: 0, body: "", error: err.message, clave: false };
   }
 }
 
@@ -219,9 +225,15 @@ export async function doctor({ json = false } = {}) {
       anota("El gateway contesta con la clave del paquete", "ok",
         n != null ? `HTTP 200 · ${n} modelos disponibles` : "HTTP 200 a /v1/models");
     } else if (pf.status === 401) {
-      anota("El gateway pide una clave que no es la del paquete", "falla",
-        "HTTP 401. Es el sintoma de un gateway de otra instalación con otra clave.",
-        "mata el proceso y abre jpcode otra vez para que regenere la suya");
+      if (!pf.clave) {
+        anota("No encuentro la clave del gateway para comprobarlo", "aviso",
+          "no hay ni OPENCODE_GATEWAY_KEY ni gateway/.api-key, así que el 401 no se puede atribuir",
+          "abre jpcode una vez: genera la clave y la deja en gateway/.api-key");
+      } else {
+        anota("El gateway pide una clave que no es la del paquete", "falla",
+          "HTTP 401 con la clave de este paquete. Es el sintoma de un gateway de otra instalación.",
+          "mata el proceso y abre jpcode otra vez para que regenere la suya");
+      }
     } else {
       anota("El gateway no contesta a /v1/models", "aviso",
         `HTTP ${pf.status}${pf.error ? " · " + pf.error : ""}`,

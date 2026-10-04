@@ -133,6 +133,13 @@ const claveGateway = asegurarClaveGateway();
  * Tambien hace que `jpcode doctor` funcione con un gateway caido, que es
  * justo cuando mas falta hace. */
 if (process.argv[2] === "doctor") {
+  /* La clave se le pasa por el MISMO camino que se la pasan al gateway, para
+   * que el doctor compare contra la clave de verdad y no contra una suposición.
+   * Sin esto, en el uso normal (donde la clave vive en el fichero y el
+   * launcher se la da al gateway por entorno) el doctor vería un 401 falso. */
+  if (claveGateway && !process.env.OPENCODE_GATEWAY_KEY) {
+    process.env.OPENCODE_GATEWAY_KEY = claveGateway;
+  }
   const { doctor } = await import(join(AQUI, "gateway", "doctor.mjs"));
   const r = await doctor({ json: process.argv.includes("--json") });
   if (process.argv.includes("--json")) console.log(JSON.stringify(r.resumen, null, 2));
