@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { CAPTURA_0_2_13, CAPTURA_SIN_INVISIBLES, CAPTURA_0_2_14, CAPTURA_BUCLE, CAPTURA_SIN_CERRAR, CAPTURA_0_2_16, CAPTURA_0_2_20 } from "./fixtures-toolcalls.mjs";
+import { CAPTURA_0_2_13, CAPTURA_SIN_INVISIBLES, CAPTURA_0_2_14, CAPTURA_BUCLE, CAPTURA_SIN_CERRAR, CAPTURA_0_2_16, CAPTURA_0_2_20, CAPTURA_0_2_21, CAPTURA_0_2_21_SHELL } from "./fixtures-toolcalls.mjs";
 
 /* Se extrae la función tal cual está en server.mjs —copiada, no reimplementada—
    para que la prueba falle si el servidor deja de soportarlo. */
@@ -254,6 +254,42 @@ console.log("\nLa captura de 0.2.20: los argumentos vienen en <parameter name=..
     !/[<>]/.test(r.contentLimpio) && !/invoke|parameter|placeholder|Desktop/.test(r.contentLimpio),
     JSON.stringify(r.contentLimpio),
   );
+}
+
+/* ---- 0.2.21: el delimitador de apertura, sin `<` y sin ancho cero ---- */
+console.log("\nLa captura de 0.2.21 (el delimitador roto `][minimax>[{tool_call]`):");
+for (const [nombre, texto] of [
+  ["tal cual se ve en pantalla", CAPTURA_0_2_21],
+  ["el bloque con run_shell_command", CAPTURA_0_2_21_SHELL],
+]) {
+  const r = E(texto);
+  const visible = r.contentLimpio;
+  check(
+    nombre,
+    !/[<>]/.test(visible) &&
+      !/invoke|tool_call|parameter|placeholder|minimax|Desktop|run_shell_command/.test(visible) &&
+      /Escritorio|lectura/.test(visible) &&
+      r.toolCalls.length > 0,
+    `${JSON.stringify(visible)} · ${r.toolCalls.map((t) => t.function.name).join(",") || "sin llamadas"}`,
+  );
+}
+
+/* Lo que se ve en la captura no puede quedar ni medio rastro, aunque el
+   formato vuelva a cambiar: si no hay ninguna llamada que ejecutar, el texto
+   se queda solo con la frase del modelo. Es la garantia que sealan los 10
+   fallos que daba gateway/test-rutas.mjs con el codigo de antes. */
+console.log("\nNinguna ruta puede dejar el XML en pantalla:");
+for (const [nombre, texto] of [
+  ["0.2.13", CAPTURA_0_2_13],
+  ["0.2.14", CAPTURA_0_2_14],
+  ["0.2.16", CAPTURA_0_2_16],
+  ["0.2.20", CAPTURA_0_2_20],
+  ["0.2.21", CAPTURA_0_2_21],
+  ["0.2.21 shell", CAPTURA_0_2_21_SHELL],
+  ["sin cerrar", CAPTURA_SIN_CERRAR],
+]) {
+  const v = E(texto).contentLimpio;
+  check(`sin rastro de tool call · ${nombre}`, !/[<>]/.test(v) && !/invoke|tool_call|parameter|placeholder|minimax|Desktop/.test(v), JSON.stringify(v));
 }
 
 console.log(fallos ? `\n❌ ${fallos} fallo(s)` : "\n✅ todos los formatos se convierten en tool calls reales");

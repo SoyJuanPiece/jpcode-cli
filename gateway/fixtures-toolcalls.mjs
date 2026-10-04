@@ -86,3 +86,29 @@ export const CAPTURA_0_2_20 =
   '<invoke name="glob">\n<parameter name="pattern">C:\\Users\\Usuario\\Desktop\\* **</parameter>\n</invoke>\n' +
   '<invoke name="glob">\n<parameter name="pattern">C:\\Users\\Usuario\\Desktop\\*\\**</parameter>\n</invoke>\n' +
   "][minimax>[{</\u200Btool_call>";
+
+/* ---- 0.2.21: el delimitador de apertura, ROTO ----
+ *
+ * En la captura de 0.2.21 el modelo escribe `][minimax>[{tool_call]` — sin el
+ * `<` delante de `tool_call` y sin el ancho cero. El cierre sí lo trae. Con el
+ * `<` (0.2.20) se limpia; sin el `<` no, y el texto se quedaba entero en
+ * pantalla. Los dos casos van aquí para no volver a elegir uno por intuición.
+ *
+ * Ojo al transcribir: en la foto `{tool_call` no enseña el ancho cero porque se
+ * come el glifo de al lado. Por eso se prueban las dos variantes.
+ */
+export const CAPTURA_0_2_21 =
+  "Voy a revisar primero qué hay en tu Escritorio por si ya existe una carpeta del clan.][minimax>[{tool_call]\n" +
+  "<globe_placeholder />\n" +
+  '<invoke name="glob">\n<parameter name="pattern">C:\\Users\\Usuario\\Desktop\\*\\**</parameter>\n</invoke>\n' +
+  '<invoke name="glob">\n<parameter name="pattern">C:\\Users\\Usuario\\Desktop\\*</parameter>\n</invoke>\n' +
+  "][minimax>[{</tool_call>";
+
+/* El segundo bloque de la MISMA captura: un solo <invoke>, con el comando
+ * dentro de <command>. El nombre `run_shell_command` no es una herramienta del
+ * motor — hay que ver qué se hace con él, porque convertir la llamada no
+ * significa que se pueda ejecutar. */
+export const CAPTURA_0_2_21_SHELL =
+  "El glob está limitado al directorio de trabajo. Voy a listar el escritorio con un comando de solo lectura.][minimax>[{tool_call]\n" +
+  '<invoke name="run_shell_command"><command>Get-ChildItem -Path "$env:USERPROFILE\\Desktop" -Force | Select-Object Mode, Name, Length | Format-Table</command></invoke>\n' +
+  "][minimax>[{</tool_call>";

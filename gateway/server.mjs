@@ -440,6 +440,29 @@ function respuestaParaElMotor(partes, tcTexto, contentLimpio) {
   };
 }
 
+/**
+ * Deja `partes` listas para el motor: sin XML en el texto y con las llamadas
+ * convertidas a tool_calls de verdad.
+ *
+ * Existe porque el saneado se hacia a mano en UNA sola ruta —el streaming de
+ * /v1/chat/completions— y las otras cinco lo pasaban crudo. Medido con
+ * gateway/test-rutas.mjs: de seis rutas, cinco dejaban ver el XML. Por eso un
+ * arreglo daba verde en local y el XML seguia saliendo en la consola.
+ *
+ * Ahora TODA ruta que entrega texto del modelo al motor pasa por aqui. Si se
+ * anade una ruta nueva, que pase por esta funcion: es la unica que limpia.
+ */
+function sanearPartes(partes) {
+  const { toolCalls: tcTexto, contentLimpio } = extraerToolCallsDeTexto(partes.content || "");
+  const { toolCalls, contenido } = respuestaParaElMotor(partes, tcTexto, contentLimpio);
+  return { ...partes, content: contenido, toolCalls };
+}
+
+/** Lo mismo, sobre el SSE entero de Zen (no sobre un `partes`). */
+function sanearSse(sse) {
+  return sanearPartes(partesDelSse(sse));
+}
+
 function extraerToolCallsDeTexto(content) {
   /* Topes. Un turno normal son unas pocas tool calls; el alto esta para que un
      modelo en bucle no convierta el extractor en un hoyo de memoria. El cuerpo de
@@ -631,7 +654,17 @@ function extraerToolCallsDeTexto(content) {
    * XML, y si no se pudo convertir, se avisa por consola como hasta ahora.
    */
   let sinTags = limpio;
-  const marcaRe = /<(?:invoke|tool_call|tool_reflect|function|tool_use)/i;
+  /* La marca tiene que cubrir tambien los delimitadores ROTOS.
+   *
+   * En 0.2.21 el modelo escribio `][minimax>[{tool_call]`: sin el `<` delante y
+   * sin el ancho cero. El patron de antes exigia el `<`, no lo encontraba, y el
+   * corte se hacia en el `<invoke>` de mas abajo — dejando por delante justo lo
+   * que no se debe ver: el resto del token y el `<globe_placeholder />`. Eso es
+   * lo que se leia en pantalla.
+   *
+   * Por eso ahora busca `invoke`/`tool_call` aunque no lleven `<`, y tambien
+   * `<algo_placeholder`, que el modelo suelta suelto antes del bloque. */
+  const marcaRe = /<\s*\/?\s*(?:invoke|tool_call|tool_reflect|function|tool_use)|(?:^|[^\w<])(?:invoke|tool_call|tool_reflect)\s*[>\]]|<\w*_placeholder/i;
   const marca = marcaRe.exec(sinTags);
   if (marca) sinTags = sinTags.slice(0, marca.index);
 
@@ -678,7 +711,7 @@ function modeloParaClaude(pedido) {
 
 /** Junta el SSE en una respuesta normal de OpenAI (para quien no pide stream). */
 function aFormatoOpenAI(sse, model) {
-  const { id, content, reasoning, finish, usage } = partesDelSse(sse);
+  const { id, content, reasoning, finish, usage, toolCalls } = sanearSse(sse);
   return {
     id: id || ocId("chatcmpl_"),
     object: "chat.completion",
@@ -686,8 +719,12 @@ function aFormatoOpenAI(sse, model) {
     model,
     choices: [{
       index: 0,
-      message: { role: "assistant", content },
-      finish_reason: finish || "stop",
+      message: {
+        role: "assistant",
+        content,
+        ...(toolCalls?.length ? { tool_calls: toolCalls } : {}),
+      },
+      finish_reason: toolCalls?.length ? "tool_calls" : (finish || "stop"),
     }],
     ...(usage ? { usage } : {}),
     // Extra, no estándar: útil para depurar respuestas vacías
@@ -696,6 +733,7 @@ function aFormatoOpenAI(sse, model) {
 }
 
 /** Pasa el SSE de Zen al cliente sin reencuadrar nada. */
+/** Pasa el SSE de Zen al cliente, saneando el texto del modelo antes. */
 function pipeSse(res, upstream) {
   res.writeHead(200, {
     "Content-Type": "text/event-stream; charset=utf-8",
@@ -705,7 +743,29 @@ function pipeSse(res, upstream) {
     ...corsHeaders(),
   });
   return (async () => {
-    for await (const chunk of upstream.body) res.write(chunk);
+    /* Bufferizado a proposito: es lo que permite limpiar el XML. Antes se
+       escribia el stream tal cual y /api/chat era la quinta ruta por la que el
+       modelo se veia en crudo. */
+    const sanas = sanearSse(await upstream.text());
+    const trozo = (delta, finish_reason = null) => {
+      res.write(`data: ${JSON.stringify({
+        id: sanas.id || ocId("chatcmpl_"),
+        object: "chat.completion.chunk",
+        created: Math.floor(Date.now() / 1000),
+        choices: [{ index: 0, delta, ...(finish_reason ? { finish_reason } : {}) }],
+        ...(sanas.usage ? { usage: sanas.usage } : {}),
+      })}\n\n`);
+    };
+    /* El razonamiento va el primero y en su propio campo, como antes del
+       bufferizado: el chat lo pinta aparte. Sin esto se perdia. */
+    if (sanas.reasoning) for (const t of sanas.reasoning.match(/[\s\S]{1,80}/g) || []) trozo({ reasoning_content: t });
+    for (const t of (sanas.content || "").match(/[\s\S]{1,80}/g) || []) trozo({ content: t });
+    for (let i = 0; i < sanas.toolCalls.length; i++) {
+      const tc = sanas.toolCalls[i];
+      trozo({ tool_calls: [{ index: i, id: tc.id, type: "function", function: { name: tc.function.name, arguments: tc.function.arguments } }] });
+    }
+    trozo({}, sanas.toolCalls.length ? "tool_calls" : (sanas.finish || "stop"));
+    res.write("data: [DONE]\n\n");
     res.end();
   })();
 }
@@ -804,7 +864,10 @@ async function* aSseOpenAI(chunks, modelo) {
 }
 
 /** Partes normalizadas → respuesta `chat.completion` de OpenAI. */
-function respuestaOpenAI(partes, modelo) {
+function respuestaOpenAI(partesCrudos, modelo) {
+  /* Siempre por sanearPartes: esta respuesta va al motor igual que la de
+     streaming, y si aqui no se limpia el XML se ve igual de feo. */
+  const partes = sanearPartes(partesCrudos);
   return {
     id: partes.id || ocId("chatcmpl_"),
     object: "chat.completion",
@@ -1124,9 +1187,10 @@ createServer(async (req, res) => {
           sendJson(res, 502, errorAnthropic(`respuesta ilegible de "${objetivo.target.providerID}": ${err.message}`, "api_error"));
           return;
         }
+        const sanas = sanearPartes(partes);
         sendJson(res, 200, respuestaAnthropic({
-          id: partes.id,
-          choices: [{ message: { content: partes.content, tool_calls: partes.toolCalls }, finish_reason: partes.finish }],
+          id: sanas.id,
+          choices: [{ message: { content: sanas.content, tool_calls: sanas.toolCalls }, finish_reason: sanas.toolCalls.length ? "tool_calls" : sanas.finish }],
           usage: partes.usage,
         }, pedido, names.vuelta), comunes);
         return;
@@ -1156,34 +1220,46 @@ createServer(async (req, res) => {
           ...corsHeaders(),
         });
         const traductor = traductorSse({ model: pedido || model, vuelta: names.vuelta });
+        /* Bufferizar, como en /v1/chat/completions, y no pasar el SSE crudo al
+           traductor.
+         *
+         * Antes se empujaba trozo a trovejo y el XML del modelo se traducía a
+           texto de Anthropic tal cual: Claude Code lo pintaba en pantalla. El
+           saneo es de todo el turno, no de un trozo, asi que no se puede hacer
+           sobre el vuelo — igual que en la otra ruta. */
         // OJO: los trozos son Uint8Array, y `buf += trozo` los convertiría en
         // "100,97,116,97,58,…" (los bytes en decimal). Hay que decodificar.
         const dec = new TextDecoder();
         let buf = "";
         for await (const chunk of upstream.body) {
           buf += typeof chunk === "string" ? chunk : dec.decode(chunk, { stream: true });
-          const lineas = buf.split("\n");
-          buf = lineas.pop() ?? "";
-          for (const linea of lineas) {
-            const l = linea.trim();
-            if (!l.startsWith("data:")) continue;
-            const d = l.slice(5).trim();
-            if (!d || d === "[DONE]") continue;
-            let j;
-            try { j = JSON.parse(d); } catch { continue; }
-            for (const frame of traductor.push(j)) res.write(frame);
+        }
+        const sanasMsg = sanearSse(buf);
+        /* Se re-emite como SSE de OpenAI y de ahi al traductor, que es quien
+           sabe convertirlo a los eventos de Anthropic que espera el motor. */
+        const trozos = (sanasMsg.content || "").match(/[\s\S]{1,80}/g) || [];
+        if (trozos.length) {
+          for (const t of trozos) {
+            for (const frame of traductor.push({ choices: [{ delta: { content: t } }] })) res.write(frame);
           }
         }
+        for (let i = 0; i < sanasMsg.toolCalls.length; i++) {
+          const tc = sanasMsg.toolCalls[i];
+          for (const frame of traductor.push({
+            choices: [{ delta: { tool_calls: [{ index: i, id: tc.id, type: "function", function: { name: tc.function.name, arguments: tc.function.arguments } }] } }],
+          })) res.write(frame);
+        }
+        for (const frame of traductor.push({ choices: [{ delta: {}, finish_reason: sanasMsg.toolCalls.length ? "tool_calls" : (sanasMsg.finish || "stop") }] })) res.write(frame);
         for (const frame of traductor.cerrar()) res.write(frame);
         res.end();
         return;
       }
 
-      const partes = partesDelSse(await upstream.text());
+      const sanas = sanearSse(await upstream.text());
       sendJson(res, 200, respuestaAnthropic({
-        id: partes.id,
-        choices: [{ message: { content: partes.content, tool_calls: partes.toolCalls }, finish_reason: partes.finish }],
-        usage: partes.usage,
+        id: sanas.id,
+        choices: [{ message: { content: sanas.content, tool_calls: sanas.toolCalls }, finish_reason: sanas.toolCalls.length ? "tool_calls" : sanas.finish }],
+        usage: sanas.usage,
       }, pedido || model, names.vuelta), { "x-opencode-model": model });
       return;
     }

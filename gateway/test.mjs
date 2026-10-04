@@ -203,7 +203,12 @@ try {
   const sse = await stream.text();
   ok(stream.status === 200, "el modelo gratis responde 200");
   ok(stream.headers.get("content-type").startsWith("text/event-stream"), "el proxy devuelve text/event-stream");
-  ok(sse.includes('"content":"Hola "') && sse.includes("[DONE]"), "el SSE pasa tal cual, con su [DONE]");
+  /* El texto llega ÍNTEGRO, pero ya no con el troceado exacto del upstream:
+     /api/chat bufferiza el stream para poder limpiar el XML del modelo (si no,
+     era una de las rutas por las que se veía en crudo), y re-emite en trozos
+     propios. Lo que se comprueba es que no se pierde ni una letra. */
+  const textoApiChat = [...sse.matchAll(/"content":"((?:[^"\\]|\\.)*)"/g)].map((m) => JSON.parse(`"${m[1]}"`)).join("");
+  ok(textoApiChat === "Hola mundo" && sse.includes("[DONE]"), "el texto llega íntegro, con su [DONE]", JSON.stringify(textoApiChat));
   ok(sse.includes("reasoning_content"), "el razonamiento también pasa");
 
   /* --- la receta que exige el servidor de Zen --- */
