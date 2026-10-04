@@ -54,10 +54,21 @@ async function conGateway({ version = VERSION_PKG, viejo = false }, fn) {
        * comprobaran nada sobre lo que se publica de verdad. */
       let s = readFileSync(join(dir, "server.mjs"), "utf8");
       const antes = s;
-      s = s.replace(/version:\s*[A-Za-z_$][\w$]*\(\)/, 'version: "0.2.19"');
-      s = s.replace(/rutasLimpias:\s*[A-Z_$][\w$]*/, 'rutasLimpias: false');
+      /* OJO al orden: en el minificado los dos campos pueden ir al reves que en
+       * el fuente. Por eso van por separado pero anclados a SU clave, no a la
+       * linea: `rutasLimpias` es un nombre único en todo el fichero, y
+       * `version:` se ancla al valor que es una llamada a funcion.
+       * Si se sustituyeran por posicion, `version:` pillaria el `version:` de
+       * otro sitio y `rutasLimpias` se quedaria como estaba. */
+      s = s.replace(/rutasLimpias:\s*[A-Za-z_$][\w$]*/, "rutasLimpias:false");
+      s = s.replace(/version:\s*[A-Za-z_$][\w$]*\(\)/, 'version:"0.2.19"');
       if (s === antes) throw new Error("el mutador del test no encontró los campos en /api/status");
-      if (/rutasLimpias:\s*[A-Z_$]/.test(s)) throw new Error("el mutador no pudo sustituir rutasLimpias");
+      /* Comprobacion: el valor tiene que ser la CONSTANTE `false`, no una
+       * llamada. Si se mira `\s*[A-Za-z_$]` despues de los dos puntos, `false`
+         * tambien casa y el test creeria que no se sustituyo — que es lo que
+         * pasaba. */
+      if (!/rutasLimpias:\s*false\b/.test(s)) throw new Error("el mutador no pudo sustituir rutasLimpias");
+      if (/version:\s*[A-Za-z_$][\w$]*\(\)/.test(s)) throw new Error("el mutador no pudo sustituir version");
       writeFileSync(join(dir, "server.mjs"), s);
     }
 
