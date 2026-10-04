@@ -273,6 +273,14 @@ async function responde(puerto) {
  * que nuestra clave abra su /v1/models. Sin esto, jpcode reutilizaría el gateway
  * de otra instalación (con otra clave) y los modelos fallarían con un error raro.
  */
+const VERSION_PAQUETE = (() => {
+  try {
+    return JSON.parse(readFileSync(join(AQUI, "package.json"), "utf8")).version || "";
+  } catch {
+    return "";
+  }
+})();
+
 async function esNuestro(puerto, k) {
   if (!k) return false;
   try {
@@ -280,7 +288,23 @@ async function esNuestro(puerto, k) {
       headers: { Authorization: `Bearer ${k}` },
       signal: AbortSignal.timeout(1500),
     });
-    return r.ok;
+    if (!r.ok) return false;
+  } catch {
+    return false;
+  }
+  /* Ya no basta con que abra la clave: también tiene que DECIR su versión. */
+     Un gateway de una instalación previa (o de otra versión) se queda sin
+     tocar: no se le reconoce como nuestro y elegirPuerto lo MATA y pone el
+     gateway de ESTA instalación, en vez de reutilizar un parser viejo. Esto
+     es lo que hacía que los tool calls salieran rotos y, en 0.2.11, el OOM. */
+  try {
+    const s = await fetch(`http://127.0.0.1:${puerto}/api/status`, { signal: AbortSignal.timeout(1500) });
+    if (!s.ok) return false;
+    const data = await s.json();
+    const v = data?.codigo?.version || "";
+    if (!v) return false; // gateway anterior a /api/status → el que hay que matar
+    if (VERSION_PAQUETE && v !== VERSION_PAQUETE) return false; // versión vieja
+    return true;
   } catch {
     return false;
   }
