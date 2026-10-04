@@ -33,7 +33,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, cpSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { homedir } from "node:os";
 
 const AQUI = dirname(dirname(fileURLToPath(import.meta.url))); // .../jpcode
@@ -140,7 +140,7 @@ if (process.argv[2] === "doctor") {
   if (claveGateway && !process.env.OPENCODE_GATEWAY_KEY) {
     process.env.OPENCODE_GATEWAY_KEY = claveGateway;
   }
-  const { doctor } = await import(join(AQUI, "gateway", "doctor.mjs"));
+  const { doctor } = await import(pathToFileURL(join(AQUI, "gateway", "doctor.mjs")).href);
   const r = await doctor({ json: process.argv.includes("--json") });
   if (process.argv.includes("--json")) console.log(JSON.stringify(r.resumen, null, 2));
   process.exit(r.failed ? 1 : 0);
