@@ -452,6 +452,43 @@ const version = versionPropia();
 
 stopSpinner();
 
+/* ---------------------------------------------------------------------- *
+ * Limpiar la terminal al abrir.
+ *
+ * OpenCode lo hace con dos modos de pantalla (main-screen → split-footer al
+ * empezar a hablar). Copiar eso en jpcode daría el parpadeo que ya se quitó:
+ * con `useTerminalBuffer` el historial se escribe una vez en el scrollback y
+ * no se repinta, y eso es incompatible con "la app es dueña de la pantalla".
+ *
+ * Pero no hace falta. Lo que se quiere es QUE AL ABRIR NO HAYA NADA MÁS QUE
+ * SU CLI, y eso es una sola secuencia, escrita una vez, ANTES de que el motor
+ * exista en pantalla. Después el scrollback se comporta como un terminal
+ * normal: sin repintar nada y sin parpadeo. Son compatibles.
+ *
+ * La secuencia completa es `\x1b[2J\x1b[3J\x1b[H`: limpia pantalla (2J),
+ * limpia también el scrollback (3J) y vuelve al origen (H). Sin el 3J, al
+ * scrollear hacia arriba seguiría apareciendo la conversación anterior.
+ *
+ * Guardas, todas necesarias:
+ *   - que stdout sea una TTY: si la salida va a un fichero o a otro proceso,
+ *     los bytes de escape acabarían en medio del contenido;
+ *   - que no sea un modo de una sola pasada: en `jpcode "haz esto"` la salida
+ *     suele acabar en un pipe y no hay pantalla que limpiar;
+ *   - NO_COLOR / JPCODE_NO_CLEAR=1 para desactivarlo sin tocar nada.
+ *
+ * En modo `--json` tampoco: ahí lo que importa es la salida, no la pantalla.
+ *//* La decisión vive en su propio fichero para poder probarla: aquí dentro del
+   launcher habría que arrancar el motor entero para cada caso. */
+const { limpiarTerminal, limpiar: escribirLimpieza } = await import(
+  new URL("./limpiar-terminal.mjs", import.meta.url)
+);
+const _limpieza = limpiarTerminal({
+  isTTY: process.stdout.isTTY,
+  argv: process.argv.slice(2),
+  env: process.env,
+});
+if (_limpieza.limpiar) escribirLimpieza(process.stderr);
+
 const hijo = spawn(process.execPath, [entrada, ...process.argv.slice(2)], {
   stdio: "inherit",
   env: {
