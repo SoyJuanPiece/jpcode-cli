@@ -85,10 +85,42 @@ if (!tema || !tema.name) {
   process.exit(1);
 }
 
+/* El tema claro va aparte, y también se registra.
+ *
+ * El motor tiene `darkTheme`/`lightTheme` y sabe escolher según el terminal,
+ * pero solo con los temas que estén en `customThemes`. Antes solo se le daba el
+ * oscuro, así que con el terminal en claro se pintaba el negro de jpcode sobre
+ * un fondo claro y se veía fatal — de ahí la queja de que en modo blanco se ve
+ * mal. Registrando los dos, el motor elige.
+ *
+ * Si el fichero claro no existe o está mal, se avisa y se sigue con el oscuro:
+ * un tema legible es mejor que no arrancar. */
+const temaClaro = leerJson(join(HERE, "theme-light.json"), null);
+if (!temaClaro || !temaClaro.name) {
+  console.error(`⚠ no encuentro ${join(HERE, "theme-light.json")}; solo queda el tema oscuro`);
+}
+
 const actual = leerJson(SETTINGS, {});
 const ui = { ...(actual.ui || {}) };
-ui.theme = tema.name;
-ui.customThemes = { ...(ui.customThemes || {}), [tema.name]: tema };
+/* `auto`, no el nombre del tema.
+ *
+ * El motor solo auto-detecta si `ui.theme` es "auto" o no viene:
+ *
+ *     if(configuredTheme && configuredTheme!==AUTO_THEME_NAME) setActiveTheme(...)
+ *     if(!configuredTheme || configuredTheme===AUTO_THEME_NAME) resolveAutoThemeAsync()
+ *
+ * O sea, poniendo "jpcode" aqui el motor se ceñia al oscuro y nunca preguntaba
+ * al terminal, que es justo lo que hacia que en modo claro se viera el tema
+ * oscuro. Con "auto" entra el parche del motor (patch-jpcode-tema.mjs), que
+ * detecta el fondo del terminal y elige entre los dos de abajo.
+ *
+ * Si el usuario ha elegido un tema a mano, se respeta. */
+if (!ui.theme || ui.theme === tema.name || ui.theme === temaClaro?.name) ui.theme = "auto";
+ui.customThemes = {
+  ...(ui.customThemes || {}),
+  [tema.name]: tema,
+  ...(temaClaro && temaClaro.name ? { [temaClaro.name]: temaClaro } : {}),
+};
 ui.customAsciiArt = { small: BANNER_SMALL, large: BANNER_LARGE };
 ui.customBannerTitle = TITULO;
 ui.customBannerSubtitle = SUBTITULO;
