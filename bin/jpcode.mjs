@@ -125,6 +125,20 @@ function asegurarClaveGateway() {
 
 const claveGateway = asegurarClaveGateway();
 
+/* ---- `jpcode doctor` -------------------------------------------------- *
+ * Va AQUÍ, antes de tocar nada: levantar o reutilizar el gateway forma parte
+ * de lo que el doctor diagnostica, asi que si se ejecutara despues estaria
+ * mirando lo que el mismo acaba de arreglar, y no serviria para nada.
+ *
+ * Tambien hace que `jpcode doctor` funcione con un gateway caido, que es
+ * justo cuando mas falta hace. */
+if (process.argv[2] === "doctor") {
+  const { doctor } = await import(join(AQUI, "gateway", "doctor.mjs"));
+  const r = await doctor({ json: process.argv.includes("--json") });
+  if (process.argv.includes("--json")) console.log(JSON.stringify(r.resumen, null, 2));
+  process.exit(r.failed ? 1 : 0);
+}
+
 /** La versión de jpcode, del package.json que está al lado. Si no se puede leer,
  *  undefined: mejor que el motor anuncie la suya (que es lo que pasaba antes) a
  *  que jpcode no arranque. */

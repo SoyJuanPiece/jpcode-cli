@@ -102,6 +102,63 @@ const DESCRIPCION_FILLER = {
 
 const KEY_FILE = join(ROOT, ".api-key");
 
+/** La version del paquete que trae este gateway, leida de su package.json. */
+function versionDelPaquete() {
+  for (const relativo of ["../package.json", "./package.json"]) {
+    try {
+      const p = JSON.parse(readFileSync(new URL(relativo, import.meta.url), "utf8"));
+      if (p?.version) return p.version;
+    } catch { /* siguiente */ }
+  }
+  return null;
+}
+
+/* Un trozo del texto que el modelo emitia en 0.2.21, con el delimitador roto
+ * (`][minimax>[{tool_call]`, sin `<` y sin el caracter de ancho cero). Es el
+ * caso que se veia en pantalla.
+ *
+ * Va pegado aqui a proposito y no importado de fixtures-toolcalls.mjs: esto no
+ * es una prueba, es el codigo de produccion dictando como se comporta, y no
+ * debe depender de un fichero de tests para saber si funciona. */
+const MUESTRA_XML = "Voy a revisar tu Escritorio.][minimax>[{tool_call]\n" +
+  "<globe_placeholder />\n" +
+  '<invoke name="glob">\n<parameter name="pattern">C:\\Users\\*\\**</parameter>\n</invoke>\n' +
+  "][minimax>[{</​tool_call>";
+
+/**
+ * El gateway se comprueba a si mismo al arrancar.
+ *
+ * La leccion de las nueve versiones anteriores: los tests daban verde porque
+ * probaban el fichero del repo, no el proceso que estaba vivo. Aqui es el
+ * proceso real, con su codigo real, ejecutando el saneo real sobre el texto
+ * real que fallaba. Si esto dice que no, es que no funciona — y lo dice
+ * `jpcode doctor` sin tener que fiarse de nadie.
+ *
+ * Solo mira el texto visible: que no escape ni un `<`, ni la palabra del
+ * token, ni el nombre de la herramienta.
+ */
+function comprobarRutas() {
+  try {
+    const { contentLimpio, toolCalls } = extraerToolCallsDeTexto(MUESTRA_XML);
+    const limpio =
+      !/[<>]/.test(contentLimpio) &&
+      !/invoke|tool_call|parameter|placeholder|minimax|Desktop/.test(contentLimpio) &&
+      /^Voy a revisar tu Escritorio\.$/.test(contentLimpio.trim()) &&
+      toolCalls.length > 0;
+    if (!limpio) {
+      console.error(
+        `[jpcode-gateway] ATENCIÓN: el saneo de texto NO está funcionando en este ` +
+          `proceso. Se vería el XML del modelo en pantalla. Ejecuta jpcode doctor.`,
+      );
+    }
+    return limpio;
+  } catch (err) {
+    console.error(`[jpcode-gateway] no se pudo comprobar el saneo: ${err.message}`);
+    return false;
+  }
+}
+const COMPROBADO_RUTAS = comprobarRutas();
+
 /** Prioridad: OPENCODE_GATEWAY_KEY > CHAT_API_KEY > .api-key > una nueva que se guarda con permisos 600. */
 async function claveDelGateway() {
   if (process.env.OPENCODE_GATEWAY_KEY) return process.env.OPENCODE_GATEWAY_KEY;
@@ -1294,6 +1351,17 @@ createServer(async (req, res) => {
           pid: process.pid,
           inicio: new Date().toISOString(),
           args: process.argv.slice(2).join(" "),
+          /* Que version DICE ser este codigo, y de donde salio. Es lo que
+             distingue "instale 0.2.26" de "el gateway vivo es de 0.2.19", que
+             es el fallo que mas veces ha pasado: el proceso queda vivo al
+             cerrar jpcode y la sesion siguiente lo reutiliza. Lo lee jpcode
+             doctor. */
+          version: versionDelPaquete(),
+          archivo: process.argv[1] || null,
+          /* Si el texto del modelo se limpia de verdad. Se comprueba aqui, en
+             el proceso que vive, y no en el fichero: asi el doctor no depende
+             de acertar con el codigo del disco. */
+          rutasLimpias: COMPROBADO_RUTAS,
         },
       });
       return;
