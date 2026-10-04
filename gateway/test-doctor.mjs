@@ -47,13 +47,18 @@ async function conGateway({ version = VERSION_PKG, viejo = false }, fn) {
     for (const m of [...MODULOS, "server.mjs"]) cpSync(join(HERE, m), join(dir, m));
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "x", version }));
     if (viejo) {
+      /* Se sustituyen los VALORES, no las lineas enteras: el codigo minificado
+       * tiene los campos en la misma linea y los nombres de funcion cambiados
+       * (versionDelPaquete se llama kQ o como toque). Buscar la linea entera
+       * solo funcionaba contra el fuente, y hacia que estas pruebas no
+       * comprobaran nada sobre lo que se publica de verdad. */
       let s = readFileSync(join(dir, "server.mjs"), "utf8");
-      s = s
-        .replace(/\n\s*version: versionDelPaquete\(\),/, "")
-        .replace(/\n\s*rutasLimpias: COMPROBADO_RUTAS,/,
-          '\n          version: "0.2.19",\n          rutasLimpias: false,');
+      const antes = s;
+      s = s.replace(/version:\s*[A-Za-z_$][\w$]*\(\)/, 'version: "0.2.19"');
+      s = s.replace(/rutasLimpias:\s*[A-Z_$][\w$]*/, 'rutasLimpias: false');
+      if (s === antes) throw new Error("el mutador del test no encontró los campos en /api/status");
+      if (/rutasLimpias:\s*[A-Z_$]/.test(s)) throw new Error("el mutador no pudo sustituir rutasLimpias");
       writeFileSync(join(dir, "server.mjs"), s);
-      if (/\n\s*rutasLimpias: COMPROBADO_RUTAS,/.test(s)) throw new Error("el mutador del test no quitó el campo");
     }
 
     hijo = spawn(process.execPath, [join(dir, "server.mjs"), String(PUERTO)], {
