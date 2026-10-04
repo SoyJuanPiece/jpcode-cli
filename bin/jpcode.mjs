@@ -292,7 +292,7 @@ async function esNuestro(puerto, k) {
   } catch {
     return false;
   }
-  /* Ya no basta con que abra la clave: también tiene que DECIR su versión. */
+  /* Ya no basta con que abra la clave: también tiene que DECIR su versión.
      Un gateway de una instalación previa (o de otra versión) se queda sin
      tocar: no se le reconoce como nuestro y elegirPuerto lo MATA y pone el
      gateway de ESTA instalación, en vez de reutilizar un parser viejo. Esto
