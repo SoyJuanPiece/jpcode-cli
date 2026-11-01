@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Claude Code apuntando a los modelos gratis de OpenCode Zen a través del proxy
+# local de opencode-chat. Se instala como comando global: escribes `claude` y ya.
+#
+#   OPENCODE_PROXY_PORT   puerto del proxy (por defecto 8096)
+#   OPENCODE_CHAT_DIR     carpeta con server.mjs (por defecto, la del repo)
+#   CLAUDE_REAL_BIN       binario real de Claude Code (si la autodetección falla)
+#
+# Qué hace: si el proxy no está levantado, lo levanta él mismo en tmux y espera.
+# Lo que exporta se puede pisar desde fuera (ANTHROPIC_MODEL, ANTHROPIC_AUTH_TOKEN…).
+set -euo pipefail
+
+# --- localizar el proxy y el binario real de Claude Code ----------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/server.mjs" ]; then
+  DEFAULT_CHAT_DIR="$SCRIPT_DIR"
+else
+  DEFAULT_CHAT_DIR="${HOME}/studio/opencode-chat"
+fi
+CHAT_DIR="${OPENCODE_CHAT_DIR:-$DEFAULT_CHAT_DIR}"
+
+resolver_real() {
+  local c
+  for c in \
+    "${CLAUDE_REAL_BIN:-}" \
+    "${HOME}/.global_modules/bin/claude" \
+    "${HOME}/.npm-global/bin/claude" \
+    "/usr/local/bin/claude" \
+    "/usr/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe"; do
+    [ -n "$c" ] && [ -x "$c" ] && { printf '%s' "$c"; return 0; }
+  done
+  return 1
+}
+REAL="$(resolver_real)" || {
+  echo "⚠️  No encuentro el binario real de Claude Code. Instálalo con:" >&2
+  echo "    npm i -g @anthropic-ai/claude-code" >&2
+  echo "    (o define CLAUDE_REAL_BIN=/ruta/al/claude)" >&2
+  exit 127
+}
+
+KEY_FILE="$CHAT_DIR/.api-key"
+ZEN_FILE="$CHAT_DIR/.zen-key"
+PORT="${OPENCODE_PROXY_PORT:-8096}"
+SESSION="${OPENCODE_PROXY_SESSION:-claude-proxy}"
+HEALTH="http://127.0.0.1:$PORT/api/status"
+
+vivo() { curl -sf -m 2 "$HEALTH" >/dev/null 2>&1; }
+
+# --- levantar el proxy si hace falta -----------------------------------------
+if ! vivo; then
+  if command -v tmux >/dev/null 2>&1 && [ -f "$CHAT_DIR/server.mjs" ]; then
+    ZEN=""
+    [ -s "$ZEN_FILE" ] && ZEN="$(cat "$ZEN_FILE")"
+    echo "→ levantando el proxy de OpenCode Zen en el puerto $PORT…" >&2
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+    if [ -n "$ZEN" ]; then
+      tmux new-session -d -s "$SESSION" -c "$CHAT_DIR" \
+        "HOST=127.0.0.1 OPENCODE_API_KEY='$ZEN' node server.mjs $PORT > .run-claude.log 2>&1"
+    else
+      echo "  (sin .zen-key: va por el tier anónimo de Zen)" >&2
+      tmux new-session -d -s "$SESSION" -c "$CHAT_DIR" \
+        "HOST=127.0.0.1 node server.mjs $PORT > .run-claude.log 2>&1"
+    fi
+    for _ in $(seq 1 60); do
+      vivo && break
+      sleep 0.25
+    done
+  fi
+fi
+
+if ! vivo; then
+  echo "⚠️  El proxy de OpenCode no responde en http://127.0.0.1:$PORT" >&2
+  echo "    Arráncalo a mano: cd $CHAT_DIR && node server.mjs $PORT" >&2
+fi
+
+# --- apuntar Claude Code al proxy --------------------------------------------
+export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-http://127.0.0.1:$PORT}"
+if [ -z "${ANTHROPIC_AUTH_TOKEN:-}" ] && [ -s "$KEY_FILE" ]; then
+  export ANTHROPIC_AUTH_TOKEN="$(cat "$KEY_FILE")"
+fi
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:-1}"
+# Zen no es un proveedor que Claude Code conozca: que no se queje por el
+# catálogo de modelos ni imponga su ventana de contexto por defecto.
+export CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT="${CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT:-1}"
+
+# El modelo activo NO se fija aquí a propósito. ANTHROPIC_MODEL pisa el menú
+# /model y hace que la cabecera muestre un nombre enmascarado ("Sonnet 4.5")
+# mientras el que responde es un modelo de Zen. El modelo vive en los ajustes
+# del usuario (~/.claude/settings.json, clave `model`) y se cambia con /model.
+# Si el usuario exporta ANTHROPIC_MODEL/CLAUDE_MODEL a mano, se respeta.
+if [ -z "${ANTHROPIC_MODEL:-}" ] && [ -n "${CLAUDE_MODEL:-}" ]; then
+  export ANTHROPIC_MODEL="$CLAUDE_MODEL"
+fi
+# El modelo "pequeño/rápido" (tareas de fondo) sí va por nombre real de Zen.
+export ANTHROPIC_SMALL_FAST_MODEL="${ANTHROPIC_SMALL_FAST_MODEL:-${CLAUDE_SMALL_MODEL:-mimo-v2.6-flash-free}}"
+
+# --- menú /model con los modelos REALES de Zen ------------------------------
+# Sin esto, el selector muestra el disfraz (Opus/Sonnet/Fable…). Con el
+# modelPicker, cada fila es un modelo de Zen de verdad. `behavesAs` le dice a
+# Claude Code qué ventana de contexto asumir. Se respeta un --settings propio.
+SETTINGS_FILE="$CHAT_DIR/claude-settings.json"
+args=("$@")
+tiene_settings=0
+for a in "$@"; do
+  case "$a" in --settings|--settings=*) tiene_settings=1 ;; esac
+done
+if [ "$tiene_settings" -eq 0 ] && [ -f "$SETTINGS_FILE" ]; then
+  args=(--settings "$SETTINGS_FILE" "${args[@]}")
+fi
+
+exec "$REAL" "${args[@]}"

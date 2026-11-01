@@ -1,35 +1,78 @@
 {
   "name": "@juanpiecedev/jpcode",
-  "version": "2.1.0",
-  "description": "JpCode \u2014 CLI propio con dise\u00f1o estilo Claude Code, potenciado por el motor opencode 2.x y su tier gratuito. Tu interfaz, su inteligencia.",
+  "version": "0.2.32",
+  "description": "jpcode — el CLI de código de JuanPiece: pinta de Claude Code, modelos gratis y tu propia API key, con gateway local.",
   "type": "module",
-  "license": "MIT",
-  "author": "JuanPiece",
   "bin": {
-    "jpcode": "./bin/jpcode.mjs"
+    "jpcode": "bin/jpcode.mjs"
   },
   "files": [
-    "bin/",
-    "src/",
+    "bin",
+    "engine",
+    "gateway",
+    "img-bridge.mjs",
+    "sync-jpcode.mjs",
+    "postinstall.mjs",
+    "locales",
+    "patch-jpcode-brand.mjs",
+    "patch-jpcode-clipboard.mjs",
+    "patch-jpcode-image-watch.mjs",
+    "patch-jpcode-render.mjs",
+    "patch-jpcode-aesthetics.mjs",
+    "patch-jpcode-minimax-plan.mjs",
+    "check-locale-es.mjs",
+    "theme.json",
+    "install.sh",
     "README.md",
-    "LICENSE"
+    "patch-jpcode-tema.mjs",
+    "theme-light.json",
+    "herramientas"
   ],
-  "dependencies": {},
-  "optionalDependencies": {},
-  "engines": {
-    "node": ">=18"
+  "scripts": {
+    "postinstall": "node postinstall.mjs"
   },
+  "optionalDependencies": {
+    "@qwen-code/audio-capture": "0.24.7",
+    "@lydell/node-pty": "1.2.0-beta.10",
+    "@lydell/node-pty-darwin-arm64": "1.2.0-beta.10",
+    "@lydell/node-pty-darwin-x64": "1.2.0-beta.10",
+    "@lydell/node-pty-linux-arm64": "1.2.0-beta.10",
+    "@lydell/node-pty-linux-x64": "1.2.0-beta.10",
+    "@lydell/node-pty-win32-arm64": "1.2.0-beta.10",
+    "@lydell/node-pty-win32-x64": "1.2.0-beta.10",
+    "@teddyzhu/clipboard": "0.0.5",
+    "@teddyzhu/clipboard-darwin-arm64": "0.0.5",
+    "@teddyzhu/clipboard-darwin-x64": "0.0.5",
+    "@teddyzhu/clipboard-linux-x64-gnu": "0.0.5",
+    "@teddyzhu/clipboard-linux-arm64-gnu": "0.0.5",
+    "@teddyzhu/clipboard-win32-x64-msvc": "0.0.5",
+    "@teddyzhu/clipboard-win32-arm64-msvc": "0.0.5",
+    "sharp": "0.35.4"
+  },
+  "os": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "Apache-2.0",
+  "author": "JuanPiece",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SoyJuanPiece/jpcode-cli.git"
   },
   "homepage": "https://github.com/SoyJuanPiece/jpcode-cli#readme",
+  "bugs": {
+    "url": "https://github.com/SoyJuanPiece/jpcode-cli/issues"
+  },
   "keywords": [
-    "jpcode",
     "cli",
-    "ai",
-    "coding-agent",
-    "opencode",
-    "terminal"
+    "agent",
+    "jpcode",
+    "juanpiece",
+    "claude-code-style",
+    "zen"
   ]
 }

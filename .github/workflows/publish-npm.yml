@@ -1,0 +1,48 @@
+# Publica jpcode en npm por OIDC: sin tokens, sin secretos guardados.
+#
+# Antes de que esto funcione hay que hacer DOS cosas a mano, una sola vez:
+#
+#   1. Publicar la primera versión a mano (el trusted publisher se configura
+#      sobre un paquete que ya existe):
+#        npm login
+#        bash publish-npm.sh
+#   2. En npmjs.com → tu paquete jpcode → Settings → Trusted Publisher:
+#        Publisher:     GitHub Actions
+#        Organization:  SoyJuanPiece
+#        Repository:    jpcode-cli
+#        Workflow:      publish-npm.yml
+#
+# A partir de ahí, este workflow publica solo. El OIDC de npm necesita npm >= 11.5
+# y los runners vienen con 10.x, así que se actualiza en un paso.
+name: Publicar en npm
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write # el token OIDC con el que npm autentica la publicación
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+
+      - name: Actualizar npm (el OIDC necesita >= 11.5)
+        run: npm install -g npm@latest
+
+      # build-dist.sh minifica con bun, y bun también hace de gate: el paquete
+      # minificado corre las 227 aserciones antes de que se publique nada.
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Construir, probar y publicar
+        run: npm --version && bash publish-npm.sh
