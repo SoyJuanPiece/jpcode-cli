@@ -11,21 +11,19 @@ const API = "/api";
 const THEME_STORE = "opencode_theme";
 
 /* ================== catálogo: SOLO modelos gratis ==================
- * Todos los que los docs de Zen marcan "Free", probados uno a uno el 2026-09-30
+ * Todos los que el catálogo de Zen marca "Free" (revisado el 2026-11-01, opencode 2.2.5)
  * con la receta que exige el servidor (la añade server.mjs). `tone` es lo que se
  * vio de verdad: 200 y respuesta coherente = ok; 200 pero inservible = warn;
  * error de protocolo o endpoint muerto = bad. */
 const MODELS = [
-  { id: "big-pickle", title: "Big Pickle", tone: "ok", note: "el más rápido (3-5 s) y bueno en código; identidad stealth" },
-  { id: "mimo-v2.5-free", title: "MiMo V2.5 Free", tone: "ok", note: "de Xiaomi; bueno pero lento (5-11 s)" },
-  { id: "mimo-v2.6-flash-free", title: "MiMo V2.6 Flash Free", tone: "ok" },
-  { id: "longcat-2.5-preview-free", title: "LongCat 2.5 Preview Free", tone: "ok", note: "el más constante en español" },
-  { id: "nemotron-3-ultra-free", title: "Nemotron 3 Ultra Free", tone: "ok", note: "no sale en /models, pero responde" },
-  { id: "space-bunny-free", title: "Space Bunny Free", tone: "ok", note: "el único que va sin key, por el tier anónimo" },
-  { id: "nemotron-3.5-lightning-free", title: "Nemotron 3.5 Lightning Free", tone: "warn", note: "vuelca su cadena de pensamiento en la respuesta y tarda 45-120 s" },
-  { id: "muse-spark-1.3-contributor-free", title: "Muse Spark 1.3 Contributor Free", tone: "bad", note: "400: habla el protocolo /responses, no chat/completions" },
-  { id: "muse-spark-1.2-contributor-free", title: "Muse Spark 1.2 Contributor Free", tone: "bad", note: "igual que el 1.3; además comparte tus prompts con Meta" },
-  { id: "ling-3.0-flash-fin-free", title: "Ling 3.0 Flash Fin Free", tone: "bad", note: "400: endpoint is unavailable" },
+  { id: "big-pickle", title: "Big Pickle", tone: "ok", note: "razonamiento y tool use; 200k de contexto" },
+  { id: "deepseek-v4.1-flash-free", title: "DeepSeek V4.1 Flash Free", tone: "ok", note: "razonamiento y coding; 200k" },
+  { id: "glm-5.3-flash-free", title: "GLM-5.3 Flash Free", tone: "ok", note: "multimodal y tareas largas; 200k" },
+  { id: "mimo-v2.6-flash-free", title: "MiMo V2.6 Flash Free", tone: "ok", note: "multimodal: imagen, audio y vídeo" },
+  { id: "beam-free", title: "Beam Free", tone: "ok", note: "MoE con 23B activos; 1M de contexto" },
+  { id: "flint-40b-free", title: "Flint 40B Free", tone: "ok", note: "MoE abierto; 262k de contexto" },
+  { id: "nemotron-3.5-super-vl-free", title: "Nemotron 3.5 Super VL Free", tone: "ok", note: "visión-lenguaje; 1M de contexto" },
+  { id: "nemotron-3.5-lightning-free", title: "Nemotron 3.5 Lightning Free", tone: "warn", note: "vuelca su cadena de pensamiento" },
 ];
 
 /* ================== estado ================== */

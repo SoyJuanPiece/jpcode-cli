@@ -31,7 +31,7 @@
  * Uso:
  *   node gateway/probe-tools.mjs                # los 11 modelos, tool_choice auto
  *   node gateway/probe-tools.mjs --comparar     # además compara con "none"
- *   node gateway/probe-tools.mjs space-bunny-free big-pickle
+ *   node gateway/probe-tools.mjs big-pickle deepseek-v4.1-flash-free
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";

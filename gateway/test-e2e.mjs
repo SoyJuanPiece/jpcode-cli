@@ -105,7 +105,7 @@ if (!(await esperarArranque())) {
 }
 
 const cuerpo = {
-  model: "space-bunny-free",
+  model: "mimo-v2.6-flash-free",
   stream: true,
   messages: [{ role: "user", content: "mira qué hay en el Escritorio" }],
   tools: [

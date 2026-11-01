@@ -6,38 +6,38 @@
       {
         "model": "big-pickle",
         "label": "big-pickle",
-        "description": "Zen gratis · el más equilibrado (1.5–4.6 s) · recomendado",
+        "description": "Zen gratis · razonamiento y tool use · recomendado",
+        "behavesAs": "claude-sonnet-4-5"
+      },
+      {
+        "model": "deepseek-v4.1-flash-free",
+        "label": "deepseek-v4.1-flash-free",
+        "description": "Zen gratis · razonamiento y coding (200k)",
+        "behavesAs": "claude-sonnet-4-5"
+      },
+      {
+        "model": "glm-5.3-flash-free",
+        "label": "glm-5.3-flash-free",
+        "description": "Zen gratis · multimodal y tareas largas (200k)",
         "behavesAs": "claude-sonnet-4-5"
       },
       {
         "model": "mimo-v2.6-flash-free",
         "label": "mimo-v2.6-flash-free",
-        "description": "Zen gratis · el más rápido (≈1 s) · ideal para tareas cortas",
+        "description": "Zen gratis · el más rápido; imagen, audio y vídeo",
         "behavesAs": "claude-haiku-4-5"
       },
       {
-        "model": "longcat-2.5-preview-free",
-        "label": "longcat-2.5-preview-free",
-        "description": "Zen gratis · el más constante en español (2–7 s)",
+        "model": "beam-free",
+        "label": "beam-free",
+        "description": "Zen gratis · MoE con 23B activos (1M de contexto)",
         "behavesAs": "claude-sonnet-4-5"
       },
       {
-        "model": "nemotron-3-ultra-free",
-        "label": "nemotron-3-ultra-free",
-        "description": "Zen gratis · muy rápido (≈0.4 s) · no sale en /v1/models",
+        "model": "nemotron-3.5-super-vl-free",
+        "label": "nemotron-3.5-super-vl-free",
+        "description": "Zen gratis · visión-lenguaje (1M de contexto)",
         "behavesAs": "claude-haiku-4-5"
-      },
-      {
-        "model": "mimo-v2.5-free",
-        "label": "mimo-v2.5-free",
-        "description": "Zen gratis · bueno pero lento (5–11 s)",
-        "behavesAs": "claude-sonnet-4-5"
-      },
-      {
-        "model": "space-bunny-free",
-        "label": "space-bunny-free",
-        "description": "Zen gratis · el único que responde también sin clave",
-        "behavesAs": "claude-sonnet-4-5"
       }
     ]
   }

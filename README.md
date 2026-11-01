@@ -163,7 +163,7 @@ con `tool_choice: "required"` el modelo devuelve `content: ""` o frases en prosa
 `gateway/forced-tools.mjs` traduce una en la otra: al modelo se le pide el JSON (con el esquema
 delante, `tool_choice: "none"` y las tools de relleno intactas, que el gate necesita) y de vuelta se
 fabrica el `tool_calls` que el cliente esperaba, aunque el JSON venga en valla de markdown o con
-prosa alrededor. Verificado contra `big-pickle`, `mimo-v2.6-flash-free` y `longcat-2.5-preview-free`
+prosa alrededor. Verificado contra `big-pickle`, `mimo-v2.6-flash-free` y `deepseek-v4.1-flash-free`
 con la petición real del clasificador: antes `tool_calls: null`; después, la llamada con
 `{"shouldBlock":false}` para una acción segura y `{"shouldBlock":true}` para una peligrosa.
 

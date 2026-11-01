@@ -56,14 +56,14 @@ const ok = (cond, etiqueta, detalle = "") => {
  * ===================================================================== */
 const KEY = "oc_sk_de_prueba_no_real";
 const GKEY = "ock_clave_del_gateway_de_prueba";   // tu clave de /v1
-const SIN_RECETA = "mimo-v2.5-free";             // el mock le devuelve 403
-const PROTOCOLO = "muse-spark-1.3-contributor-free"; // el mock le devuelve 400
+const SIN_RECETA = "flint-40b-free";             // el mock le devuelve 403
+const PROTOCOLO = "beam-free";                    // el mock le devuelve 400
 
 /**
  * Zen de mentira. Guarda la última petición recibida para poder comprobar la
  * receta (UA, ids, stream, tools) y simula los tres finales posibles:
- *   - muse-spark-1.3 → 400 de protocolo (como el real)
- *   - mimo-v2.5-free → 403 FreeTierError (como si faltara la receta)
+ *   - beam-free      → 400 de protocolo
+ *   - flint-40b-free → 403 FreeTierError (como si faltara la receta)
  *   - el resto       → SSE normal
  */
 function startFakeZen() {
@@ -76,12 +76,12 @@ function startFakeZen() {
       req.on("end", () => {
         const body = JSON.parse(raw || "{}");
         visto.body = body;
-        if (body.model === "mimo-v2.5-free") {
+        if (body.model === "flint-40b-free") {
           res.writeHead(403, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ type: "error", error: { type: "FreeTierError", message: "OpenCode's free tier can only be used from within OpenCode" } }));
           return;
         }
-        if (body.model === "muse-spark-1.3-contributor-free") {
+        if (body.model === "beam-free") {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: { message: "Model does not support this protocol." } }));
           return;
@@ -89,7 +89,7 @@ function startFakeZen() {
         res.writeHead(200, { "Content-Type": "text/event-stream" });
         // El puente de tool calls forzadas (forced-tools.mjs) traduce la llamada a
         // "responde con este JSON". Así responden los del tier gratis, que no emiten
-        // tool calls: longcat lo dice limpio y en valla, nemotron mete prosa antes.
+        // tool calls: casi todos lo dicen limpio en valla; nemotron mete prosa antes.
         const forzado = (body.messages || []).some(
           (m) => typeof m.content === "string" && m.content.includes("would have been the arguments of the function"),
         );
@@ -326,7 +326,7 @@ try {
     method: "POST",
     headers: { Authorization: `Bearer ${GKEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: "longcat-2.5-preview-free",
+      model: "deepseek-v4.1-flash-free",
       messages: [
         { role: "system", content: "Eres el clasificador del modo auto." },
         { role: "user", content: "¿`ls -la` es seguro?" },
@@ -613,11 +613,11 @@ console.log("\n== app.js: init y catálogo ==");
   );
   ok(store.get("serverstate").textContent.includes("key cargada"), "el chip dice que hay key en el server");
   const modelos = findAll(store.get("models"), "model");
-  ok(modelos.length === 10, "se listan los 10 modelos gratis", String(modelos.length));
+  ok(modelos.length === 8, "se listan los 8 modelos gratis", String(modelos.length));
   ok(modelos[0].className.includes("active"), "el primero (big-pickle) sale seleccionado");
-  ok(store.get("models").textContent.includes("no usable"), "los que no hablan chat/completions se marcan");
+  ok(!store.get("models").textContent.includes("no usable"), "ningún modelo actual es inservible");
   ok(findAll(store.get("models"), "tag-warn").length === 1, "el lento sale en ámbar");
-  ok(findAll(store.get("models"), "tag-bad").length === 3, "los 3 inservibles salen en rojo");
+  ok(findAll(store.get("models"), "tag-bad").length === 0, "no queda ningún inservible en rojo");
   ok(store.get("banner").className.includes("ok"), "con un modelo bueno el banner es verde");
 
   store.get("modelsearch").listeners.input[0]({ target: { value: "pickle" } });
@@ -715,8 +715,8 @@ console.log("\n== app.js: parar, tema y sonda ==");
   store.get("probebtn").listeners.click[0]();
   await pet(); await pet();
   const filas = findAll(store.get("proberows"), "proberow");
-  ok(filas.length === 10, "la sonda pinta una fila por modelo", String(filas.length));
-  ok(store.get("probesummary").textContent.includes("10 de 10"), "la sonda da un resumen", store.get("probesummary").textContent);
+  ok(filas.length === 8, "la sonda pinta una fila por modelo", String(filas.length));
+  ok(store.get("probesummary").textContent.includes("8 de 8"), "la sonda da un resumen", store.get("probesummary").textContent);
   const modeloRows = findAll(store.get("models"), "model");
   ok(findAll(modeloRows[0], "tag-ok").length > 0, "tras la sonda, el modelo vivo sale marcado en verde");
 }
@@ -730,7 +730,7 @@ console.log("\n== app.js: parar, tema y sonda ==");
   const pet = async () => { await wait(); await wait(); await wait(); await wait(); };
   store.get("probebtn").listeners.click[0]();
   await pet(); await pet();
-  ok(store.get("probesummary").textContent.includes("0 de 10"), "con todo en 403 el resumen dice 0");
+  ok(store.get("probesummary").textContent.includes("0 de 8"), "con todo en 403 el resumen dice 0");
   ok(findAll(store.get("models"), "tag-bad").length > 0, "los modelos caídos se marcan en rojo");
 }
 
@@ -955,7 +955,7 @@ try {
 
   const modelosV1 = await (await getAuth("/v1/models")).json();
   const ids = modelosV1.data.map((m) => m.id);
-  ok(modelosV1.data.length > 10, "/v1/models suma los de los proveedores a los de Zen", String(modelosV1.data.length));
+  ok(modelosV1.data.length === MODELS.length + 2, "/v1/models suma los de los proveedores a los de Zen", String(modelosV1.data.length));
   ok(ids.includes("groq/llama-3.3-70b-versatile"), "/v1/models lista los modelos de los conectados");
   ok(!ids.includes("google/gemini-2.5-flash"), "y NO los de los que no lo están");
   ok(ids.includes("big-pickle"), "/v1/models sigue listando los gratis de Zen");

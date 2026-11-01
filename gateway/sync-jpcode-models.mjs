@@ -97,7 +97,7 @@ for (const m of lista) {
   if (ZEN_PLAN.has(prov) && !conZenPlan) continue;
   if (!grupos.has(prov)) grupos.set(prov, []);
   const modalities = m.x_opencode_modalities || (
-    /mimo|longcat-2\.5|space-bunny|vision|[-_]vl/i.test(id) ? { image: true, video: true } : undefined
+    /mimo|glm-5\.3|deepseek-v4\.1|super-vl|vision|[-_]vl/i.test(id) ? { image: true, video: true } : undefined
   );
   grupos.get(prov).push({ id, titulo, protocolo: m.x_opencode_protocol || "openai", free: m.x_opencode_free, modalities });
 }

@@ -164,12 +164,12 @@ arreglarlo, `claude-settings.json` usa el `modelPicker` de Claude Code:
 ```
 Select model
   1. Default (recommended)     Use the default model (currently Opus 5.5) · $4/$20 per Mtok
-❯ 2. big-pickle ✔              Zen gratis · el más equilibrado (1.5–4.6 s) · recomendado
-  3. mimo-v2.6-flash-free      Zen gratis · el más rápido (≈1 s) · ideal para tareas cortas
-  4. longcat-2.5-preview-free  Zen gratis · el más constante en español (2–7 s)
-  5. nemotron-3-ultra-free     Zen gratis · muy rápido (≈0.4 s) · no sale en /v1/models
-  6. mimo-v2.5-free            Zen gratis · bueno pero lento (5–11 s)
-  7. space-bunny-free          Zen gratis · el único que responde también sin clave
+❯ 2. big-pickle ✔               Zen gratis · razonamiento y tool use · recomendado
+  3. deepseek-v4.1-flash-free   Zen gratis · razonamiento y coding (200k)
+  4. glm-5.3-flash-free         Zen gratis · multimodal y tareas largas (200k)
+  5. mimo-v2.6-flash-free       Zen gratis · el más rápido; imagen, audio y vídeo
+  6. beam-free                  Zen gratis · MoE con 23B activos (1M de contexto)
+  7. nemotron-3.5-super-vl-free Zen gratis · visión-lenguaje (1M de contexto)
 ```
 
 Detalles del `modelPicker` que descubrimos a base de probarlo (no está documentado):
@@ -189,7 +189,7 @@ Detalles del `modelPicker` que descubrimos a base de probarlo (no está document
 Para pedir uno puntual sin tocar el menú:
 
 ```bash
-ANTHROPIC_MODEL=longcat-2.5-preview-free claude -p "hola"
+ANTHROPIC_MODEL=deepseek-v4.1-flash-free claude -p "hola"
 claude --model mimo-v2.6-flash-free -p "hola"
 ```
 
@@ -249,9 +249,9 @@ Claude Code solo sabe pedir `claude-*`, así que se traducen solos:
 |---|---|
 | cualquier `claude-*` | `big-pickle` (`CLAUDE_MODEL` para cambiarlo) |
 | con `haiku` / `mini` / `fast` | `mimo-v2.6-flash-free` (`CLAUDE_SMALL_MODEL`) |
-| un id de Zen (`big-pickle`, `oc/longcat…`) | ese mismo |
+| un id de Zen (`big-pickle`, `oc/beam-free…`) | ese mismo |
 
-Para forzar uno concreto, `ANTHROPIC_MODEL=longcat-2.5-preview-free`.
+Para forzar uno concreto, `ANTHROPIC_MODEL=deepseek-v4.1-flash-free`.
 
 ### Avisos
 
@@ -737,22 +737,20 @@ nadie de la red puede usar el proxy para gastar tu cuota. Lo que quieras usar de
 - **Markdown de verdad**, construido con **nodos del DOM, nunca `innerHTML`**.
 - **Tema claro/oscuro** y buscador de modelos.
 
-## Los 10 gratis, tal como están hoy
+## Los 8 gratis, tal como están hoy
+
+Catálogo de Zen revisado el 2026-11-01 (coincide con los 8 modelos `free` de opencode 2.2.5).
 
 | Modelo | Estado | Notas |
 |---|---|---|
-| `big-pickle` | ✅ | por defecto: el más equilibrado en español y código |
-| `mimo-v2.5-free` | ✅ | bien, pero lento (5-11 s) |
-| `mimo-v2.6-flash-free` | ✅ | el más rápido (≈1 s) |
-| `longcat-2.5-preview-free` | ✅ | el más constante en español |
-| `nemotron-3-ultra-free` | ✅ | no sale en `/models`, pero responde |
-| `space-bunny-free` | ✅ | el único que va sin key |
-| `nemotron-3.5-lightning-free` | ⚠️ | vuelca su cadena de pensamiento y tarda 45-120 s |
-| `muse-spark-1.3-contributor-free` | ❌ | 400: habla el protocolo `/responses` |
-| `muse-spark-1.2-contributor-free` | ❌ | igual; además comparte prompts con Meta |
-| `ling-3.0-flash-fin-free` | ❌ | 404: no existe la ruta |
-
-Los tres últimos se dejan en la lista a propósito: selecciónalos y verás el error real.
+| `big-pickle` | ✅ | por defecto: razonamiento y tool use, 200k de contexto |
+| `deepseek-v4.1-flash-free` | ✅ | razonamiento y coding, 200k |
+| `glm-5.3-flash-free` | ✅ | multimodal y tareas largas, 200k |
+| `mimo-v2.6-flash-free` | ✅ | multimodal: imagen, audio y vídeo, 200k |
+| `beam-free` | ✅ | MoE con 23B activos, 1M de contexto |
+| `flint-40b-free` | ✅ | MoE abierto (~2.5B activos), 262k |
+| `nemotron-3.5-super-vl-free` | ✅ | visión-lenguaje, 1M de contexto |
+| `nemotron-3.5-lightning-free` | ⚠️ | rápido, pero vuelca su cadena de pensamiento |
 
 ### Sin tool calls de relleno
 

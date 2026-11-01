@@ -4,7 +4,7 @@
  *
  * El motor (chunk-DJLLLYKC.js) tiene un array `MODALITY_PATTERNS` que
  * decide si un modelo soporta imagen/vídeo. Los modelos libres de Zen
- * (mimo-v2.6-flash-free, longcat-2.5-preview-free, space-bunny-free, …)
+ * (mimo-v2.6-flash-free, glm-5.3-flash-free, nemotron-3.5-super-vl-free, …)
  * no estaban en ese array y el motor los trataba como texto, con lo que:
  *   - `getEffectiveInputModalities().image` devolvía `false`.
  *   - `zoom_image` rechazaba: "requires a model that accepts image inputs".
@@ -55,7 +55,7 @@ if (!existsSync(chunks)) {
 const MARKER = "/^mimo[-v]/";
 
 // La pieza que queremos insertar al principio de MODALITY_PATTERNS
-const INSERT = "[/^mimo[-v]/,{image:true,video:true}],[/^longcat-2\\.5/,{image:true}],[/^space-bunny/,{image:true,video:true}],[/^deepseek-v4-flash-vision/,{image:true}],";
+const INSERT = "[/^mimo[-v]/,{image:true,video:true}],[/^glm-5\\.3/,{image:true,video:true}],[/^deepseek-v4\\.1/,{image:true}],[/^nemotron-3\\.5-super-vl/,{image:true}],";
 
 // El ancla estable: el primer patrón del array original
 const ANCHOR = "MODALITY_PATTERNS=[[/^gemini-3/,FULL_MULTIMODAL]";
@@ -94,7 +94,7 @@ for (const f of candidatos) {
     process.exit(1);
   }
 
-  console.log(`• MODALITY_PATTERNS: mimo/longcat/space-bunny añadidos (${f})`);
+  console.log(`• MODALITY_PATTERNS: mimo/glm/deepseek/nemotron añadidos (${f})`);
   hecho = true;
   break;
 }
@@ -104,7 +104,7 @@ if (!hecho) {
   process.exitCode = 1;
 } else {
   console.log("\n✅ Listo. Los modelos de visión de Zen ahora se declaran como multimodales.");
-  console.log("   mimo-v2.6-flash-free, longcat-2.5-preview-free, space-bunny-free");
+  console.log("   mimo-v2.6-flash-free, glm-5.3-flash-free, nemotron-3.5-super-vl-free");
   console.log("   y deepseek-v4-flash-vision-exp aceptan imágenes desde el motor.");
   console.log("   Tras `qwen update` o `vendor-engine.sh`, relanza este script.");
 }

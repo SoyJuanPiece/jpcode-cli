@@ -1,5 +1,6 @@
 /**
- * Catálogo canónico de los modelos gratis de Zen, probados el 2026-09-30.
+ * Catálogo canónico de los modelos gratis de Zen, tomados del catálogo
+ * público de Zen el 2026-11-01 (opencode 2.2.5).
  * Lo usa el servidor para `GET /v1/models` y para validar lo que pides.
  *
  * `app.js` mantiene su propia copia con títulos y notas para pintar la interfaz
@@ -11,16 +12,14 @@
  *       "bad"  → no habla chat/completions; se deja para que veas el error real
  */
 export const MODELS = [
-  { id: "big-pickle", title: "Big Pickle", tone: "ok", note: "el más equilibrado; identidad stealth" },
-  { id: "mimo-v2.6-flash-free", title: "MiMo V2.6 Flash Free", tone: "ok", note: "el más rápido (≈1 s)", modalities: { image: true, video: true } },
-  { id: "longcat-2.5-preview-free", title: "LongCat 2.5 Preview Free", tone: "ok", note: "el más constante en español", modalities: { image: true } },
-  { id: "nemotron-3-ultra-free", title: "Nemotron 3 Ultra Free", tone: "ok", note: "no sale en /models, pero responde" },
-  { id: "mimo-v2.5-free", title: "MiMo V2.5 Free", tone: "ok", note: "bueno, pero lento (5-11 s)", modalities: { image: true, video: true } },
-  { id: "space-bunny-free", title: "Space Bunny Free", tone: "ok", note: "el único que va también sin key", modalities: { image: true, video: true } },
-  { id: "nemotron-3.5-lightning-free", title: "Nemotron 3.5 Lightning Free", tone: "warn", note: "vuelca su cadena de pensamiento; 45-120 s" },
-  { id: "muse-spark-1.3-contributor-free", title: "Muse Spark 1.3 Contributor Free", tone: "bad", note: "400: habla el protocolo /responses" },
-  { id: "muse-spark-1.2-contributor-free", title: "Muse Spark 1.2 Contributor Free", tone: "bad", note: "igual; comparte prompts con Meta" },
-  { id: "ling-3.0-flash-fin-free", title: "Ling 3.0 Flash Fin Free", tone: "bad", note: "404: la ruta no existe" },
+  { id: "big-pickle", title: "Big Pickle", tone: "ok", note: "razonamiento y tool use; 200k de contexto" },
+  { id: "deepseek-v4.1-flash-free", title: "DeepSeek V4.1 Flash Free", tone: "ok", note: "razonamiento y coding; 200k", modalities: { image: true } },
+  { id: "glm-5.3-flash-free", title: "GLM-5.3 Flash Free", tone: "ok", note: "multimodal y tareas largas; 200k", modalities: { image: true, video: true } },
+  { id: "mimo-v2.6-flash-free", title: "MiMo V2.6 Flash Free", tone: "ok", note: "multimodal: imagen, audio y vídeo; 200k", modalities: { image: true, video: true } },
+  { id: "beam-free", title: "Beam Free", tone: "ok", note: "MoE con 23B activos; 1M de contexto" },
+  { id: "flint-40b-free", title: "Flint 40B Free", tone: "ok", note: "MoE abierto (~2.5B activos); 262k" },
+  { id: "nemotron-3.5-super-vl-free", title: "Nemotron 3.5 Super VL Free", tone: "ok", note: "visión-lenguaje; 1M de contexto", modalities: { image: true } },
+  { id: "nemotron-3.5-lightning-free", title: "Nemotron 3.5 Lightning Free", tone: "warn", note: "rápido, pero vuelca su cadena de pensamiento" },
 ];
 
 /** Ids que se pueden pedir por la API (los "bad" también, para ver el error). */

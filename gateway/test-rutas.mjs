@@ -84,7 +84,7 @@ for (const stream of [true, false]) {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${CLAVE}` },
     body: JSON.stringify({
-      model: "space-bunny-free",
+      model: "mimo-v2.6-flash-free",
       stream,
       messages: [{ role: "user", content: "mira qué hay en el Escritorio" }],
       tools: [{ type: "function", function: { name: "glob", description: "busca", parameters: { type: "object", properties: { pattern: { type: "string" } }, required: ["pattern"] } } }],
@@ -126,7 +126,7 @@ for (const stream of [true, false]) {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": CLAVE, "anthropic-version": "2023-06-01" },
     body: JSON.stringify({
-      model: "space-bunny-free",
+      model: "mimo-v2.6-flash-free",
       stream,
       max_tokens: 2048,
       messages: [{ role: "user", content: "mira qué hay en el Escritorio" }],
@@ -166,7 +166,7 @@ for (const stream of [true, false]) {
   const r = await fetch(`http://127.0.0.1:${PUERTO_GW}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "space-bunny-free", messages: [{ role: "user", content: "mira qué hay en el Escritorio" }] }),
+    body: JSON.stringify({ model: "mimo-v2.6-flash-free", messages: [{ role: "user", content: "mira qué hay en el Escritorio" }] }),
   });
   const crudo = await r.text();
   let texto = "";
@@ -186,7 +186,7 @@ for (const stream of [true, false]) {
   const r = await fetch(`http://127.0.0.1:${PUERTO_GW}/v1/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${CLAVE}` },
-    body: JSON.stringify({ model: "space-bunny-free", messages: [{ role: "user", content: "mira qué hay en el Escritorio" }] }),
+    body: JSON.stringify({ model: "mimo-v2.6-flash-free", messages: [{ role: "user", content: "mira qué hay en el Escritorio" }] }),
   });
   const crudo = await r.text();
   let texto = "";

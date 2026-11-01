@@ -6,7 +6,7 @@
  * un upstream simulado, así que no decían nada sobre si los modelos gratis
  * emiten tool_calls nativas o solo texto.
  *
- *   node gateway/probar-real.mjs                 # space-bunny-free
+ *   node gateway/probar-real.mjs                 # big-pickle
  *   node gateway/probar-real.mjs big-pickle      # otro modelo
  *   node gateway/probar-real.mjs todos           # los 7 que respondieron
  *
@@ -85,11 +85,12 @@ async function probar(modelo) {
 }
 
 const TODOS = [
-  "space-bunny-free", "big-pickle", "mimo-v2.6-flash-free",
-  "longcat-2.5-preview-free", "nemotron-3-ultra-free", "mimo-v2.5-free",
+  "big-pickle", "deepseek-v4.1-flash-free", "glm-5.3-flash-free",
+  "mimo-v2.6-flash-free", "beam-free", "flint-40b-free",
+  "nemotron-3.5-super-vl-free", "nemotron-3.5-lightning-free",
 ];
 const args = process.argv.slice(2);
-const objetivos = args.includes("todos") ? TODOS : args.length ? args : ["space-bunny-free"];
+const objetivos = args.includes("todos") ? TODOS : args.length ? args : ["big-pickle"];
 
 console.log(`\nProbando contra el tier público de verdad (${objetivos.join(", ")})\n`);
 

@@ -265,8 +265,8 @@ const sendJson = (res, status, obj, extra) => send(res, status, JSON.stringify(o
  * texto", y eso era precisamente lo que hacia que las llamadas salieran como
  * texto: el modelo leia 11 herramientas que le prohibian usarlas y una decena
  * mas que si podia usar, y escribia las llamadas en el texto en vez de
- * emitirlas. Medido: los 7 modelos gratis que responden (big-pickle, los dos
- * mimo, longcat, los dos nemotron y space-bunny) emitsen tool_calls NATIVAS
+ * emitirlas. Medido: los modelos gratis actuales (big-pickle, deepseek-v4.1-flash,
+ * glm-5.3-flash, mimo-v2.6-flash, beam, flint-40b y los dos nemotron) emiten tool_calls NATIVAS
  * cuando se les mandan herramientas de verdad y tool_choice "auto".
  */
 function fillerTools(yaTengo) {
@@ -852,7 +852,7 @@ const MODELOS_PUBLICOS = MODELS.map((m) => ({
 
 /**
  * Decide a quién va un modelo pedido:
- *   - `big-pickle`, `oc/longcat…`     → tier gratis de Zen (la ruta de siempre)
+ *   - `big-pickle`, `oc/beam-free`…     → tier gratis de Zen (la ruta de siempre)
  *   - `groq/llama-3.3-70b-versatile`  → ese proveedor del catálogo de models.dev
  * Devuelve `{ zen }`, `{ target }` o `{ error }`.
  *
