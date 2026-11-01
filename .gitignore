@@ -25,3 +25,6 @@ gateway/.zen-key
 gateway/.cache/
 gateway/.bin/
 gateway/*.log
+
+# Clave compartida del gateway local: se genera en cada instalación
+/.api-key
