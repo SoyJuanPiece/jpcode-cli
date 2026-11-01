@@ -1,0 +1,35 @@
+name: Publish to npm
+
+# Publica con OIDC (Trusted Publishing): no usa NPM_TOKEN ni OTP.
+# Requiere configurar el "Trusted Publisher" en npmjs.com para este repo.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  id-token: write # obligatorio para OIDC
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+
+      # npm >= 11.5.1 es requisito de trusted publishing
+      - name: Actualizar npm
+        run: npm install -g npm@latest
+
+      - name: Verificar el CLI
+        run: node --check bin/jpcode.mjs
+
+      - name: Publicar
+        run: npm publish --access public

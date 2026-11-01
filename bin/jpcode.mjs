@@ -1,530 +1,520 @@
 #!/usr/bin/env node
-/**
- * jpcode — el CLI de código de JuanPiece.
- *
- * Arranca el MOTOR que viaja dentro del propio paquete (`engine/`), que ya viene
- * parcheado desde la construcción: aquí no se parchea nada del sistema.
- *
- *   jpcode                 # interactivo
- *   jpcode "explica esto"  # one-shot
- *
- * Lo que hace, en orden:
- *   1. Crea ~/.jpcode la primera vez (heredando ~/.qwen si existía).
- *   2. Copia los comandos propios y fusiona tema y banner.
- *   3. Levanta el puente de imágenes del navegador.
- *   4. Se asegura de tener SU gateway (el proxy que habla con los proveedores):
- *      si el puerto está libre lo levanta, y si lo ocupa otro gateway ajeno,
- *      busca el siguiente libre y apunta los modelos ahí. Así jpcode no depende
- *      de que nadie más tenga nada instalado ni corriendo.
- *   5. Refresca la lista de /model con lo que el gateway tenga usable.
- *   6. Arranca el motor.
- *
- * Antes esto último pasaba por un envoltorio de bash que buscaba un `qwen`
- * instalado y usaba `tmux` para el proxy. Ya no hace falta ni lo uno ni lo otro.
- *
- * Variables:
- *   JPCODE_HOME          config (por defecto ~/.jpcode)
- *   OPENCODE_PROXY_PORT  primer puerto a probar para el gateway (por defecto 8096)
- *   JPCODE_IMG_BRIDGE    0 desactiva el puente de imágenes
- *   JPCODE_IMG_PORT      puerto del puente (por defecto 8097)
- *   OPENCODE_GATEWAY_DIR gateway alternativo (por defecto el del paquete)
- */
-import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, cpSync, openSync, readFileSync, writeFileSync } from "node:fs";
-import { randomBytes } from "node:crypto";
-import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
-import { homedir } from "node:os";
+// JpCode v2.1 — CLI propio con diseño estilo Claude Code.
+// Motor: opencode 2.x (serve + API HTTP v2 `/api/*` con Basic auth).
+//
+// Cambios respecto a 2.0.x: opencode 2 dejó de exponer el API v1 y renombró
+// sus paquetes (`opencode-ai` -> `@opencode/cli`, SDK v2 en proceso que exige
+// Node 24). Para mantener jpcode ligero y compatible con Node >=18, hablamos
+// directamente con el API HTTP v2 y usamos el modelo gratuito de OpenCode Zen
+// por defecto.
+import readline from "node:readline"
+import { spawn, spawnSync } from "node:child_process"
+import path from "node:path"
+import { existsSync } from "node:fs"
+import { fileURLToPath } from "node:url"
+import { createRequire } from "node:module"
 
-const AQUI = dirname(dirname(fileURLToPath(import.meta.url))); // .../jpcode
-const HOME = homedir();
-const JP_HOME = process.env.JPCODE_HOME || join(HOME, ".jpcode");
-const QWEN_LEGACY = join(HOME, ".qwen");
-const ENGINE = join(AQUI, "engine");
-const GATEWAY =
-  process.env.OPENCODE_GATEWAY_DIR ||
-  (existsSync(join(AQUI, "gateway", "server.mjs")) ? join(AQUI, "gateway") : join(HOME, "studio", "opencode-chat"));
-const PUERTO = Number(process.env.OPENCODE_PROXY_PORT || 8096);
-const VERBOSE = process.env.JPCODE_VERBOSE === "1";
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
 
-const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-let spinnerIndex = 0;
-let spinnerInterval = null;
-let currentSpinnerText = "";
+// ---------------------------------------------------------------------------
+// Branding
+// ---------------------------------------------------------------------------
 
-function startSpinner(text) {
-  if (VERBOSE || !process.stderr.isTTY) {
-    if (text) console.error(`→ jpcode: ${text}`);
-    return;
-  }
-  currentSpinnerText = text;
-  if (!spinnerInterval) {
-    spinnerInterval = setInterval(() => {
-      spinnerIndex = (spinnerIndex + 1) % FRAMES.length;
-      process.stderr.write(`\r\x1b[36m${FRAMES[spinnerIndex]}\x1b[0m \x1b[90mjpcode:\x1b[0m ${currentSpinnerText}\x1b[K`);
-    }, 80);
-  }
+const C = {
+  accent: (s) => `\x1b[38;5;214m${s}\x1b[0m`, // naranja Claude
+  dim: (s) => `\x1b[2m${s}\x1b[0m`,
+  bold: (s) => `\x1b[1m${s}\x1b[0m`,
+  green: (s) => `\x1b[32m${s}\x1b[0m`,
+  red: (s) => `\x1b[31m${s}\x1b[0m`,
+  cyan: (s) => `\x1b[36m${s}\x1b[0m`,
+  yellow: (s) => `\x1b[33m${s}\x1b[0m`,
 }
 
-function updateSpinner(text) {
-  if (VERBOSE || !process.stderr.isTTY) {
-    if (text) console.error(`→ jpcode: ${text}`);
-    return;
-  }
-  currentSpinnerText = text;
+const BANNER = [
+  "     ▄▄ ▄▄▄▄▄▄   ▄▄▄▄▄▄  ▄▄▄▄▄▄  ▄▄▄▄▄▄▄",
+  "     ██║██╔══██╗██╔════╝██╔═══██╗██╔══██╗██╔════╝",
+  "     ██║██████╔╝██║     ██║   ██║██║  ██║█████╗",
+  "██   ██║██╔═══╝ ██║     ██║   ██║██║  ██║██╔══╝",
+  "╚█████╔╝██║     ╚██████╔╝██████╔╝██████╔╝███████╗",
+  " ╚════╝ ╚═╝      ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝",
+]
+
+// Gradiente vertical por fila: arriba más claro, abajo más oscuro
+const GRADIENT = [
+  "\x1b[38;5;117m",
+  "\x1b[38;5;215m",
+  "\x1b[38;5;214m",
+  "\x1b[38;5;208m",
+  "\x1b[38;5;202m",
+  "\x1b[38;5;166m",
+]
+const RESET = "\x1b[0m"
+
+function printBanner(sub) {
+  console.log("")
+  BANNER.forEach((line, i) => {
+    console.log(`${GRADIENT[i]}${line}${RESET}`)
+  })
+  console.log("")
 }
 
-function stopSpinner() {
-  if (spinnerInterval) {
-    clearInterval(spinnerInterval);
-    spinnerInterval = null;
-    if (process.stderr.isTTY) {
-      process.stderr.write("\r\x1b[K");
+// versión leída del package.json del paquete (nunca hardcodeada)
+const APP_VERSION = (() => {
+  try {
+    return require("../package.json").version
+  } catch {
+    return "2.1.0"
+  }
+})()
+
+// ---------------------------------------------------------------------------
+// Modelo por defecto: tier gratuito de OpenCode Zen
+// ---------------------------------------------------------------------------
+
+const DEFAULT_MODEL = "opencode/deepseek-v4.1-flash-free"
+let MODEL = process.env.JPCODE_MODEL?.trim() || DEFAULT_MODEL
+
+function parseModel(spec) {
+  const [providerID, ...rest] = String(spec).split("/")
+  const id = rest.join("/")
+  if (!providerID || !id) return null
+  return { providerID, id }
+}
+
+// ---------------------------------------------------------------------------
+// UI: panel de info estilo plugin (>_ JpCode (vX) | modelo | directorio)
+// ---------------------------------------------------------------------------
+
+function printHeader() {
+  const border = C.dim("─".repeat(46))
+  console.log(border)
+  console.log(
+    ` ${C.accent(C.bold(">_ JpCode"))} ${C.dim(`(v${APP_VERSION})`)}${MODEL ? C.dim("  ·  " + MODEL) : ""}`,
+  )
+  console.log(C.dim(`   ${process.cwd()}`))
+  console.log(border)
+  console.log("")
+}
+
+// ---------------------------------------------------------------------------
+// Motor opencode como backend
+// ---------------------------------------------------------------------------
+
+async function findEngineBinary() {
+  // 1) junto a este paquete (dependencia npm @opencode/cli)
+  try {
+    const pkgDir = path.dirname(require.resolve("@opencode/cli/package.json"))
+    const candidates = ["opencode.exe", "opencode"].map((n) => path.join(pkgDir, "bin", n))
+    for (const p of candidates) if (existsSync(p)) return p
+  } catch {}
+  // 2) binario global en PATH
+  const which = spawnSync(process.platform === "win32" ? "where" : "which", ["opencode"], {
+    encoding: "utf8",
+  })
+  if (which.status === 0 && which.stdout.trim().split(/\r?\n/)[0]) {
+    return which.stdout.trim().split(/\r?\n/)[0]
+  }
+  return null
+}
+
+async function startEngine() {
+  const bin = await findEngineBinary()
+  if (!bin) {
+    console.error(C.red("✗ No encontré el motor opencode."))
+    console.error("  Instálalo con: npm i -g @opencode/cli   (o reinstala @juanpiecedev/jpcode)")
+    process.exit(1)
+  }
+
+  const port = 14000 + Math.floor(Math.random() * 20000)
+  const child = spawn(bin, ["serve", "--port", String(port), "--hostname", "127.0.0.1"], {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env },
+    cwd: process.cwd(),
+  })
+
+  let password = ""
+  let out = ""
+  const base = `http://127.0.0.1:${port}`
+
+  child.stdout.on("data", (d) => {
+    out += String(d)
+    // opencode 2 imprime: "server password <token>"
+    const m = out.match(/server password\s+(\S+)/)
+    if (m && !password) password = m[1]
+    if (process.env.JPCODE_DEBUG) process.stderr.write(C.dim(String(d)))
+  })
+  child.stderr.on("data", (d) => {
+    if (process.env.JPCODE_DEBUG) process.stderr.write(C.dim(String(d)))
+  })
+  child.on("exit", (code) => {
+    if (code && code !== 0 && !process.env.JPCODE_EXITING) {
+      console.error(C.red(`✗ El motor opencode terminó (código ${code}).`))
     }
-  }
-}
+  })
 
-const aviso = (m) => {
-  if (VERBOSE) {
-    console.error(`→ jpcode: ${m}`);
-  } else {
-    updateSpinner(m);
-  }
-};
-
-/** Lee un fichero de clave y devuelve undefined si no está o está vacío. */
-function clave(ruta) {
-  try {
-    const v = readFileSync(ruta, "utf8").trim();
-    return v || undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Garantiza que la clave del gateway exista antes de probar puertos.
- * Si no existía, la siembra en GATEWAY/.api-key para que el gateway y el motor
- * usen exactamente la misma clave desde la primera llamada.
- */
-function asegurarClaveGateway() {
-  if (process.env.OPENCODE_GATEWAY_KEY) return process.env.OPENCODE_GATEWAY_KEY;
-  if (process.env.CHAT_API_KEY) return process.env.CHAT_API_KEY;
-  const f = join(GATEWAY, ".api-key");
-  const v = clave(f);
-  if (v) return v;
-  try {
-    mkdirSync(GATEWAY, { recursive: true });
-    const nueva = "ock_" + randomBytes(24).toString("hex");
-    writeFileSync(f, nueva + "\n", { mode: 0o600 });
-    return nueva;
-  } catch {
-    return "";
-  }
-}
-
-const claveGateway = asegurarClaveGateway();
-
-/* ---- `jpcode doctor` -------------------------------------------------- *
- * Va AQUÍ, antes de tocar nada: levantar o reutilizar el gateway forma parte
- * de lo que el doctor diagnostica, asi que si se ejecutara despues estaria
- * mirando lo que el mismo acaba de arreglar, y no serviria para nada.
- *
- * Tambien hace que `jpcode doctor` funcione con un gateway caido, que es
- * justo cuando mas falta hace. */
-if (process.argv[2] === "doctor") {
-  /* La clave se le pasa por el MISMO camino que se la pasan al gateway, para
-   * que el doctor compare contra la clave de verdad y no contra una suposición.
-   * Sin esto, en el uso normal (donde la clave vive en el fichero y el
-   * launcher se la da al gateway por entorno) el doctor vería un 401 falso. */
-  if (claveGateway && !process.env.OPENCODE_GATEWAY_KEY) {
-    process.env.OPENCODE_GATEWAY_KEY = claveGateway;
-  }
-  const { doctor } = await import(pathToFileURL(join(AQUI, "gateway", "doctor.mjs")).href);
-  const r = await doctor({ json: process.argv.includes("--json") });
-  if (process.argv.includes("--json")) console.log(JSON.stringify(r.resumen, null, 2));
-  process.exit(r.failed ? 1 : 0);
-}
-
-/** La versión de jpcode, del package.json que está al lado. Si no se puede leer,
- *  undefined: mejor que el motor anuncie la suya (que es lo que pasaba antes) a
- *  que jpcode no arranque. */
-function versionPropia() {
-  try {
-    const pkg = JSON.parse(readFileSync(join(AQUI, "package.json"), "utf8"));
-    return typeof pkg.version === "string" && pkg.version ? pkg.version : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-startSpinner("Iniciando servicios de jpcode…");
-
-/* 1) Config inicial: de ~/.qwen si existía, y si no de la plantilla del gateway,
-   que es la que apunta los modelos al proxy. Sin esto, arrancaría sin modelos. */
-if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(QWEN_LEGACY, "settings.json"))) {
-  mkdirSync(JP_HOME, { recursive: true });
-  cpSync(QWEN_LEGACY, JP_HOME, { recursive: true });
-  aviso(`config inicial copiada de ${QWEN_LEGACY} a ${JP_HOME}`);
-}
-if (!existsSync(join(JP_HOME, "settings.json")) && existsSync(join(GATEWAY, "jpcode-settings.json"))) {
-  mkdirSync(JP_HOME, { recursive: true });
-  cpSync(join(GATEWAY, "jpcode-settings.json"), join(JP_HOME, "settings.json"));
-  aviso("config inicial sembrada desde la plantilla del gateway");
-}
-
-/* 2) Comandos propios, que llegan con el paquete. */
-const COMANDOS_ORIGEN = join(GATEWAY, "jpcode-commands");
-if (existsSync(COMANDOS_ORIGEN) && !existsSync(join(JP_HOME, "commands"))) {
-  cpSync(COMANDOS_ORIGEN, join(JP_HOME, "commands"), { recursive: true });
-}
-
-/* 3) Tema y banner (idempotente). */
-spawnSync(process.execPath, [join(AQUI, "sync-jpcode.mjs")], {
-  env: { ...process.env, QWEN_SETTINGS: join(JP_HOME, "settings.json") },
-  stdio: "ignore",
-});
-
-/* 4) Puente de imágenes del navegador. El terminal web no puede pegar capturas,
-   así que se sirve una página: pegas ahí y el vigilante la adjunta sola. Si ya
-   hay uno escuchando (otro jpcode abierto), se reutiliza. */
-async function arrancarPuente() {
-  if (process.env.JPCODE_IMG_BRIDGE === "0") return;
-  const script = join(AQUI, "img-bridge.mjs");
-  if (!existsSync(script)) return;
-  const puerto = Number(process.env.JPCODE_IMG_PORT || 8097);
-
-  try {
-    const r = await fetch(`http://127.0.0.1:${puerto}/status`, { signal: AbortSignal.timeout(400) });
-    if (r.ok) return;
-  } catch {
-    /* nadie escucha: lo arrancamos */
-  }
-
-  try {
-    mkdirSync(join(JP_HOME, "tmp"), { recursive: true });
-    const registro = openSync(join(JP_HOME, "tmp", "img-bridge.log"), "a");
-    spawn(process.execPath, [script], {
-      detached: true,
-      stdio: ["ignore", registro, registro],
-      env: { ...process.env, QWEN_HOME: JP_HOME },
-    }).unref();
-    const url = process.env.WEB_HOST ? `https://${puerto}-${process.env.WEB_HOST}/` : `http://127.0.0.1:${puerto}/`;
-    aviso(`puente de imágenes en ${url}`);
-  } catch (e) {
-    aviso(`no pude arrancar el puente de imágenes (${e.message})`);
-  }
-}
-await arrancarPuente();
-
-/* 4b) Watcher del portapapeles del sistema. Detecta automáticamente cuando el
-   usuario copia una imagen (captura de pantalla, Ctrl+C sobre imagen, etc.) y
-   la guarda en ~/.jpcode/tmp/clipboard/ para que el motor la adjunte sola.
-   Solo se lanza una instancia: si ya hay una corriendo (PID activo), se reutiliza. */
-function arrancarWatcherClipboard() {
-  if (process.env.JPCODE_CLIP_WATCH === "0") return;
-  const script = join(AQUI, "clipboard-watch.mjs");
-  if (!existsSync(script)) return;
-
-  /* Control de instancia única con fichero PID */
-  const pidFile = join(JP_HOME, "tmp", "clipboard-watch.pid");
-  try {
-    const pid = Number(clave(pidFile));
-    if (pid) {
-      /* Comprobamos si el proceso sigue vivo (kill -0 no lo mata, solo lo toca) */
-      try { process.kill(pid, 0); return; } catch { /* ya murió, arrancamos uno nuevo */ }
-    }
-  } catch { /* no había pidfile */ }
-
-  try {
-    mkdirSync(join(JP_HOME, "tmp"), { recursive: true });
-    const registro = openSync(join(JP_HOME, "tmp", "clipboard-watch.log"), "a");
-    const hijo = spawn(process.execPath, [script], {
-      detached: true,
-      stdio: ["ignore", registro, registro],
-      env: {
-        ...process.env,
-        JPCODE_HOME: JP_HOME,
-        JPCODE_IMG_DIR: join(JP_HOME, "tmp", "clipboard"),
-      },
-    });
-    hijo.unref();
-    /* Guardamos el PID para no arrancar duplicados */
-    try { writeFileSync(pidFile, String(hijo.pid) + "\n"); } catch { /* no crítico */ }
-  } catch (e) {
-    /* No es crítico: si falla, el usuario puede pegar por el puente web */
-  }
-}
-arrancarWatcherClipboard();
-
-
-/* 5) El gateway: el proxy que traduce a todos los proveedores. */
-async function responde(puerto) {
-  try {
-    const r = await fetch(`http://127.0.0.1:${puerto}/api/status`, { signal: AbortSignal.timeout(1000) });
-    return r.ok;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * ¿El gateway que responde en ese puerto es el NUESTRO? La única prueba fiable es
- * que nuestra clave abra su /v1/models. Sin esto, jpcode reutilizaría el gateway
- * de otra instalación (con otra clave) y los modelos fallarían con un error raro.
- */
-const VERSION_PAQUETE = (() => {
-  try {
-    return JSON.parse(readFileSync(join(AQUI, "package.json"), "utf8")).version || "";
-  } catch {
-    return "";
-  }
-})();
-
-async function esNuestro(puerto, k) {
-  if (!k) return false;
-  try {
-    const r = await fetch(`http://127.0.0.1:${puerto}/v1/models`, {
-      headers: { Authorization: `Bearer ${k}` },
-      signal: AbortSignal.timeout(1500),
-    });
-    if (!r.ok) return false;
-  } catch {
-    return false;
-  }
-  /* Ya no basta con que abra la clave: también tiene que DECIR su versión.
-     Un gateway de una instalación previa (o de otra versión) se queda sin
-     tocar: no se le reconoce como nuestro y elegirPuerto lo MATA y pone el
-     gateway de ESTA instalación, en vez de reutilizar un parser viejo. Esto
-     es lo que hacía que los tool calls salieran rotos y, en 0.2.11, el OOM. */
-  try {
-    const s = await fetch(`http://127.0.0.1:${puerto}/api/status`, { signal: AbortSignal.timeout(1500) });
-    if (!s.ok) return false;
-    const data = await s.json();
-    const v = data?.codigo?.version || "";
-    if (!v) return false; // gateway anterior a /api/status → el que hay que matar
-    if (VERSION_PAQUETE && v !== VERSION_PAQUETE) return false; // versión vieja
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Mata el proceso que ocupa un puerto dado.
- * Windows: netstat -ano + taskkill. Linux/Mac: fuser -k o lsof+kill.
- * Devuelve true si el puerto quedó libre tras el intento.
- */
-async function matarPuerto(p) {
-  try {
-    const esWindows = process.platform === "win32";
-    if (esWindows) {
-      /* netstat -ano muestra: Proto  Addr_local  Addr_remota  Estado  PID */
-      const r = spawnSync("netstat", ["-ano"], { encoding: "utf8", timeout: 5000 });
-      if (r.status !== 0) return false;
-      /* Buscamos línea con :PUERTO y estado LISTENING */
-      const linea = r.stdout.split("\n").find(
-        (l) => new RegExp(`[: ]${p}\\s`).test(l) && /LISTENING/i.test(l)
-      );
-      if (!linea) return false;
-      const pid = linea.trim().split(/\s+/).pop();
-      if (!pid || pid === "0") return false;
-      spawnSync("taskkill", ["/PID", pid, "/F"], { timeout: 5000 });
-    } else {
-      /* Linux / macOS: fuser mata directamente */
-      const fuser = spawnSync("fuser", ["-k", `${p}/tcp`], { timeout: 5000 });
-      if (fuser.status !== 0) {
-        /* fallback: lsof */
-        const lsof = spawnSync("lsof", ["-ti", `tcp:${p}`], { encoding: "utf8", timeout: 5000 });
-        const pid = (lsof.stdout || "").trim();
-        if (pid) spawnSync("kill", ["-9", pid], { timeout: 5000 });
+  // esperar a que el server responda y tengamos la contraseña
+  for (let i = 0; i < 160; i++) {
+    if (password) {
+      const r = await apiRaw(base, password, "/api/info").catch(() => null)
+      if (r?.ok) {
+        const info = await r.json().catch(() => null)
+        if (info?.version && process.env.JPCODE_DEBUG) {
+          console.error(C.dim(`  motor opencode v${info.version} en ${base}`))
+        }
+        // opencode hace fork: el PID real del server viene en /api/info
+        return { base, password, child, serverPid: info?.pid ?? null }
       }
     }
-    /* Esperamos hasta 2 s a que el proceso muera y el SO libere el puerto */
-    for (let i = 0; i < 8; i++) {
-      await new Promise((r) => setTimeout(r, 250));
-      if (!(await responde(p))) return true;
-    }
-    return false;
-  } catch {
-    return false;
+    await new Promise((r) => setTimeout(r, 250))
   }
+  console.error(C.red("✗ El motor opencode no respondió a tiempo."))
+  child.kill()
+  process.exit(1)
 }
 
-/**
- * Elige el puerto para el gateway con esta política:
- *  1. Puerto principal libre → úsalo.
- *  2. Puerto principal ocupado por el nuestro (clave ok) → reutiliza.
- *  3. Puerto principal ocupado por otro → intenta matarlo y quedarte con él.
- *  4. No se pudo matar → busca el primer puerto de la lista que esté libre.
- *  5. Todos ocupados y no matables → null (el usuario lo arranca a mano).
- */
-async function elegirPuerto() {
-  // 8097 lo usa el puente de imágenes, así que no se prueba.
-  const candidatos = [PUERTO, PUERTO + 2, PUERTO + 3, PUERTO + 4, PUERTO + 5];
-
-  /* Paso 1 y 2: puerto principal libre o ya nuestro */
-  if (!(await responde(PUERTO))) return PUERTO;
-  if (await esNuestro(PUERTO, claveGateway)) return PUERTO;
-
-  /* Paso 3: hay algo ajeno en el puerto principal → intentamos matarlo */
-  aviso(`el puerto ${PUERTO} lo ocupa un gateway ajeno; intentando liberarlo…`);
-  const liberado = await matarPuerto(PUERTO);
-  if (liberado) {
-    aviso(`puerto ${PUERTO} liberado`);
-    return PUERTO;
-  }
-
-  /* Paso 4: no pudimos matar; buscar el primero que esté libre de verdad */
-  for (const p of candidatos.slice(1)) {
-    if (!(await responde(p))) return p;           // libre: perfecto
-    if (await esNuestro(p, claveGateway)) return p; // ya nuestro
-    /* ocupado por otro: intentar matar también */
-    if (await matarPuerto(p)) return p;
-  }
-
-  return null;
+function stopEngine(engine) {
+  process.env.JPCODE_EXITING = "1"
+  try {
+    if (engine?.serverPid) process.kill(engine.serverPid, "SIGTERM")
+  } catch {}
+  try {
+    engine?.child?.kill?.()
+  } catch {}
 }
 
-const puerto = await elegirPuerto();
-let gatewayListo = false;
+// ---------------------------------------------------------------------------
+// Cliente HTTP hacia el motor (API v2 en /api/*, Basic auth)
+// ---------------------------------------------------------------------------
 
-if (puerto === null) {
-  aviso("no encuentro ningún puerto libre para el gateway.");
-  aviso(`arráncalo a mano:  node ${join(GATEWAY, "server.mjs")} <puerto>`);
-} else if (await responde(puerto)) {
-  gatewayListo = true; // ya era nuestro
-} else {
-  const server = join(GATEWAY, "server.mjs");
-  if (!existsSync(server)) {
-    aviso(`no encuentro el gateway en ${GATEWAY}`);
-  } else {
-    mkdirSync(join(JP_HOME, "tmp"), { recursive: true });
-    const registro = openSync(join(JP_HOME, "tmp", "gateway.log"), "a");
-    const zen = clave(join(GATEWAY, ".zen-key"));
-    /* El proceso arranca con el cwd en ~/.jpcode y NO dentro del paquete, y
-       OPENCODE_CHAT_DIR le dice dónde está su casa (las keys, la caché, la UI).
-       Es a propósito: este gateway es `detached` y sobrevive a jpcode, y en
-       Windows una carpeta que es el cwd de un proceso vivo no se puede
-       renombrar → `npm i -g` fallaba con EBUSY al actualizar el paquete. */
-    spawn(process.execPath, [server, String(puerto)], {
-      detached: true,
-      cwd: JP_HOME,
-      stdio: ["ignore", registro, registro],
-      env: {
-        ...process.env,
-        HOST: "127.0.0.1",
-        OPENCODE_CHAT_DIR: GATEWAY,
-        /* OPENCODE_GATEWAY_KEY: la misma clave que asegurarClaveGateway() ya
-           generó o leyó de GATEWAY/.api-key. Sin esto el gateway la ignora,
-           genera una nueva en memoria y el CLI recibe 401 (claves distintas).
-           También es lo que hace que esNuestro() detecte correctamente un
-           gateway ya corriendo: si la clave no coincide, lo descarta y abre
-           más puertos innecesariamente. */
-        ...(claveGateway ? { OPENCODE_GATEWAY_KEY: claveGateway } : {}),
-        ...(zen ? { OPENCODE_API_KEY: zen } : {}),
-      },
-    }).unref();
-
-    for (let i = 0; i < 60; i++) {
-      if (await responde(puerto)) {
-        gatewayListo = true;
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 250));
-    }
-    if (gatewayListo) aviso(`gateway en el puerto ${puerto}`);
-    else aviso(`el gateway no respondió en el puerto ${puerto}; mira ${join(JP_HOME, "tmp", "gateway.log")}`);
-  }
+function authHeader(password) {
+  return "Basic " + Buffer.from(`opencode:${password}`).toString("base64")
 }
 
-const URL_GATEWAY = `http://127.0.0.1:${puerto ?? PUERTO}/v1`;
-
-/* 7) La lista de /model se rellena con lo que el gateway tenga usable AHORA
-   (gratis de Zen + proveedores conectados). Los modelos se apuntan a NUESTRO
-   puerto, no al de siempre: si el 8096 estaba ocupado, los ajustes tienen que
-   reflejarlo o el motor pediría al gateway equivocado.
-   OPENCODE_SYNC_MODELS=0 la desactiva. */
-if (gatewayListo && process.env.OPENCODE_SYNC_MODELS !== "0" && existsSync(join(GATEWAY, "sync-jpcode-models.mjs"))) {
-  spawnSync(process.execPath, [join(GATEWAY, "sync-jpcode-models.mjs")], {
-    stdio: "ignore",
-    env: {
-      ...process.env,
-      QWEN_SETTINGS: join(JP_HOME, "settings.json"),
-      OPENCODE_GATEWAY_URL: URL_GATEWAY,
-      ...(claveGateway ? { OPENCODE_GATEWAY_KEY: claveGateway } : {}),
+function apiRaw(base, password, route, init = {}) {
+  return fetch(`${base}${route}`, {
+    ...init,
+    headers: {
+      authorization: authHeader(password),
+      ...(init.body ? { "content-type": "application/json" } : {}),
+      ...(init.headers ?? {}),
     },
-  });
+  })
 }
 
-/* 8) El motor, que viaja dentro. */
-const entrada = join(ENGINE, "cli-entry.js");
-if (!existsSync(entrada)) {
-  console.error(`⚠️  jpcode: falta el motor (${entrada}).`);
-  console.error("    En un clon del código se trae con:  bash vendor-engine.sh");
-  process.exit(127);
+async function apiJson(base, password, route, init) {
+  const res = await apiRaw(base, password, route, init)
+  const text = await res.text()
+  let body = null
+  try {
+    body = text ? JSON.parse(text) : null
+  } catch {
+    body = text
+  }
+  if (!res.ok) {
+    const msg = body?.message ?? body?.error ?? text ?? `HTTP ${res.status}`
+    throw new Error(String(msg).slice(0, 300))
+  }
+  return body
 }
 
-/* La versión que la interfaz anuncia (cabecera, /about, /bug, el item
-   `qwen-version` de la línea de estado) va por entorno porque el motor la lleva
-   escrita en su propio código: `JPCODE_CLI_VERSION` es lo que lee su
-   `getCliVersion()` tras el parche de marca, y `CLI_VERSION` lo que lee su
-   `cli-entry.js` para `jpcode --version`. Van SOLO en el entorno del motor, que
-   es el único que las necesita: el gateway no las tiene por qué, y no deben
-   colarse en las peticiones a los proveedores. */
-const version = versionPropia();
+async function createSession(engine) {
+  const model = parseModel(MODEL)
+  const body = { title: "jpcode" }
+  if (model) body.model = model
+  const res = await apiJson(engine.base, engine.password, "/api/session", {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+  return res?.data?.id ?? res?.id ?? null
+}
 
-stopSpinner();
+async function sendPrompt(engine, sessionID, text) {
+  return apiJson(engine.base, engine.password, `/api/session/${sessionID}/prompt`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  })
+}
 
-/* ---------------------------------------------------------------------- *
- * Limpiar la terminal al abrir.
- *
- * OpenCode lo hace con dos modos de pantalla (main-screen → split-footer al
- * empezar a hablar). Copiar eso en jpcode daría el parpadeo que ya se quitó:
- * con `useTerminalBuffer` el historial se escribe una vez en el scrollback y
- * no se repinta, y eso es incompatible con "la app es dueña de la pantalla".
- *
- * Pero no hace falta. Lo que se quiere es QUE AL ABRIR NO HAYA NADA MÁS QUE
- * SU CLI, y eso es una sola secuencia, escrita una vez, ANTES de que el motor
- * exista en pantalla. Después el scrollback se comporta como un terminal
- * normal: sin repintar nada y sin parpadeo. Son compatibles.
- *
- * La secuencia completa es `\x1b[2J\x1b[3J\x1b[H`: limpia pantalla (2J),
- * limpia también el scrollback (3J) y vuelve al origen (H). Sin el 3J, al
- * scrollear hacia arriba seguiría apareciendo la conversación anterior.
- *
- * Guardas, todas necesarias:
- *   - que stdout sea una TTY: si la salida va a un fichero o a otro proceso,
- *     los bytes de escape acabarían en medio del contenido;
- *   - que no sea un modo de una sola pasada: en `jpcode "haz esto"` la salida
- *     suele acabar en un pipe y no hay pantalla que limpiar;
- *   - NO_COLOR / JPCODE_NO_CLEAR=1 para desactivarlo sin tocar nada.
- *
- * En modo `--json` tampoco: ahí lo que importa es la salida, no la pantalla.
- *//* La decisión vive en su propio fichero para poder probarla: aquí dentro del
-   launcher habría que arrancar el motor entero para cada caso. */
-const { limpiarTerminal, limpiar: escribirLimpieza } = await import(
-  new URL("./limpiar-terminal.mjs", import.meta.url)
-);
-const _limpieza = limpiarTerminal({
-  isTTY: process.stdout.isTTY,
-  argv: process.argv.slice(2),
-  env: process.env,
-});
-if (_limpieza.limpiar) escribirLimpieza(process.stderr);
+// ---------------------------------------------------------------------------
+// Streaming: escucha el SSE /api/event y pinta deltas de texto
+// ---------------------------------------------------------------------------
 
-const hijo = spawn(process.execPath, [entrada, ...process.argv.slice(2)], {
-  stdio: "inherit",
-  env: {
-    ...process.env,
-    QWEN_HOME: JP_HOME,
-    JPCODE_INCREMENTAL_RENDER: process.env.JPCODE_INCREMENTAL_RENDER ?? "1",
-    ...(claveGateway ? { OPENCODE_GATEWAY_KEY: claveGateway } : {}),
-    ...(version ? { JPCODE_CLI_VERSION: version, CLI_VERSION: version } : {}),
-  },
-});
-hijo.on("error", (e) => {
-  console.error(`⚠️  jpcode: no pude arrancar el motor: ${e.message}`);
-  process.exit(127);
-});
-hijo.on("exit", (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
+function watchEvents(engine, handlers) {
+  const ctrl = new AbortController()
+  ;(async () => {
+    try {
+      const res = await apiRaw(engine.base, engine.password, "/api/event", {
+        signal: ctrl.signal,
+      })
+      if (!res.ok || !res.body) throw new Error(`event stream HTTP ${res.status}`)
+      const reader = res.body.getReader()
+      const dec = new TextDecoder()
+      let buf = ""
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += dec.decode(value, { stream: true })
+        const lines = buf.split("\n")
+        buf = lines.pop() ?? ""
+        for (const line of lines) {
+          const t = line.trim()
+          if (!t.startsWith("data:")) continue
+          try {
+            handlers.onEvent?.(JSON.parse(t.slice(5).trim()))
+          } catch {}
+        }
+      }
+    } catch (e) {
+      if (!ctrl.signal.aborted) handlers.onError?.(e)
+    }
+  })()
+  return ctrl
+}
+
+// Traduce eventos v2 a acciones de UI
+function handleEvent(evt, sessionID, state) {
+  const type = evt?.type
+  const data = evt?.data ?? {}
+
+  if (type === "session.text.delta" && data.sessionID === sessionID) {
+    const delta = data.delta ?? ""
+    if (delta) {
+      process.stdout.write(delta)
+      state.text += delta
+    }
+    return
+  }
+
+  if (type === "session.idle" && data.sessionID === sessionID) {
+    state.done = true
+    return
+  }
+
+  if (type === "provider.free-limit") {
+    const msg =
+      evt.message ??
+      "Límite del tier gratuito alcanzado. Conecta un provider o cambia de modelo con /model."
+    if (!state.errors.includes(msg)) state.errors.push(msg)
+    return
+  }
+
+  if (type === "session.step.failed" || type === "session.execution.failed") {
+    const msg = data?.error?.message ?? data?.message ?? "fallo del modelo"
+    if ((data?.sessionID === sessionID || !data?.sessionID) && !state.errors.includes(msg)) {
+      state.errors.push(msg)
+    }
+    state.done = true
+    return
+  }
+
+  if (type === "session.execution.succeeded" && data.sessionID === sessionID) {
+    state.done = true
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Modo interactivo
+// ---------------------------------------------------------------------------
+
+async function interactive(engine) {
+  printBanner()
+  printHeader()
+  console.log(C.dim("  ctrl+c salir · /help comandos · modelo gratuito por defecto"))
+  console.log("")
+
+  let sessionID = null
+  let busy = false
+  const state = { text: "", done: false, errors: [] }
+
+  const events = watchEvents(engine, {
+    onEvent: (evt) => handleEvent(evt, sessionID, state),
+    onError: (e) => {
+      if (process.env.JPCODE_DEBUG) console.error(C.dim(`  events: ${e?.message ?? e}`))
+    },
+  })
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: C.cyan("❯ "),
+  })
+  rl.prompt(true)
+
+  rl.on("line", async (line) => {
+    const input = line.trim()
+    if (busy) {
+      console.log(C.dim("  (esperando respuesta del modelo…)"))
+      rl.prompt(true)
+      return
+    }
+    if (!input) {
+      rl.prompt(true)
+      return
+    }
+
+    // comandos
+    if (input === "/help") {
+      console.log(
+        C.dim(
+          "  /new sesión nueva · /model ver modelo · /model provider/id cambiar · /clear limpiar · /exit salir",
+        ),
+      )
+      rl.prompt(true)
+      return
+    }
+    if (input === "/new") {
+      sessionID = null
+      console.log(C.dim("  ✓ sesión nueva"))
+      rl.prompt(true)
+      return
+    }
+    if (input === "/clear") {
+      console.clear()
+      printBanner()
+      printHeader()
+      rl.prompt(true)
+      return
+    }
+    if (input === "/exit" || input === "/quit") {
+      rl.close()
+      return
+    }
+    if (input.startsWith("/model")) {
+      const arg = input.slice(6).trim()
+      if (arg) {
+        if (!parseModel(arg)) {
+          console.log(C.red("  ✗ formato: /model provider/modelo"))
+        } else {
+          MODEL = arg
+          sessionID = null
+          console.log(C.dim(`  ✓ modelo ${MODEL} (sesión nueva)`))
+        }
+      } else {
+        console.log(C.dim(`  modelo actual: ${MODEL}`))
+        console.log(C.dim("  gratuitos: opencode/deepseek-v4.1-flash-free, opencode/glm-5.3-flash-free, opencode/beam-free"))
+      }
+      rl.prompt(true)
+      return
+    }
+
+    // prompt normal
+    busy = true
+    state.text = ""
+    state.done = false
+    state.errors = []
+    try {
+      if (!sessionID) {
+        sessionID = await createSession(engine)
+        if (!sessionID) throw new Error("el motor no devolvió una sesión")
+      }
+      await sendPrompt(engine, sessionID, input)
+      // el texto llega vía eventos; esperar a idle
+      await new Promise((resolve) => {
+        const iv = setInterval(() => {
+          if (state.done) {
+            clearInterval(iv)
+            resolve()
+          }
+        }, 100)
+      })
+      console.log("")
+      for (const err of state.errors) console.log(C.yellow(`  ⚠ ${err}`))
+    } catch (e) {
+      console.log(C.red(`  ✗ ${e?.message ?? e}`))
+    }
+    busy = false
+    rl.prompt(true)
+  })
+
+  // No resolvemos hasta cerrar el REPL: así el motor y el SSE siguen vivos.
+  return new Promise((resolve) => {
+    rl.on("close", () => {
+      events.abort()
+      stopEngine(engine)
+      setTimeout(resolve, 150)
+    })
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Modo one-shot: jpcode "pregunta"
+// ---------------------------------------------------------------------------
+
+async function oneShot(engine, prompt) {
+  const sessionID = await createSession(engine)
+  if (!sessionID) throw new Error("el motor no devolvió una sesión")
+
+  const state = { text: "", done: false, errors: [] }
+  let finish
+  const idle = new Promise((r) => {
+    finish = r
+  })
+
+  const events = watchEvents(engine, {
+    onEvent: (evt) => {
+      handleEvent(evt, sessionID, state)
+      if (state.done) finish()
+    },
+    onError: () => finish(),
+  })
+
+  await sendPrompt(engine, sessionID, prompt)
+  await Promise.race([idle, new Promise((r) => setTimeout(r, 120000))])
+  events.abort()
+  if (state.text && !state.text.endsWith("\n")) console.log("")
+  for (const err of state.errors) console.error(C.yellow(`⚠ ${err}`))
+}
+
+// ---------------------------------------------------------------------------
+// main
+// ---------------------------------------------------------------------------
+
+async function main() {
+  const args = process.argv.slice(2)
+  if (args.includes("--help") || args.includes("-h")) {
+    printBanner()
+    console.log(`  ${C.bold("jpcode")}              REPL interactivo`)
+    console.log(`  ${C.bold('jpcode "pregunta"')}   respuesta one-shot`)
+    console.log(`  ${C.bold("jpcode --version")}    versión`)
+    console.log("")
+    console.log(C.dim(`  modelo: ${MODEL} (cámbialo con JPCODE_MODEL o /model)`))
+    console.log("")
+    process.exit(0)
+  }
+  if (args.includes("--version") || args.includes("-v")) {
+    console.log(APP_VERSION)
+    process.exit(0)
+  }
+
+  const engine = await startEngine()
+  // si el usuario corta jpcode, no dejamos el motor huérfano
+  for (const sig of ["SIGINT", "SIGTERM"]) {
+    process.once(sig, () => {
+      stopEngine(engine)
+      process.exit(sig === "SIGINT" ? 130 : 143)
+    })
+  }
+
+  const prompt = args.filter((a) => !a.startsWith("-")).join(" ").trim()
+  if (prompt) {
+    try {
+      await oneShot(engine, prompt)
+    } finally {
+      stopEngine(engine)
+    }
+  } else {
+    await interactive(engine)
+  }
+}
+
+main()
+  .then(() => {
+    process.env.JPCODE_EXITING = "1"
+    process.exit(0)
+  })
+  .catch((e) => {
+    process.env.JPCODE_EXITING = "1"
+    console.error(C.red(`✗ ${e?.message ?? e}`))
+    process.exit(1)
+  })
